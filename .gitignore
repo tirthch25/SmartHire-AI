@@ -1,0 +1,71 @@
+# ── Secrets ───────────────────────────────────────────────────
+.env
+.env.local
+.env.*.local
+
+# ── Python ────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+.eggs/
+*.egg
+venv/
+.venv/
+env/
+.env/
+pip-wheel-metadata/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+htmlcov/
+.coverage
+.coverage.*
+coverage.xml
+*.cover
+nosetests.xml
+junit*.xml
+
+# ── Node / Next.js ────────────────────────────────────────────
+node_modules/
+.next/
+out/
+build/
+dist/
+*.tsbuildinfo
+.vercel
+
+# ── ML Models (large files) ───────────────────────────────────
+*.bin
+*.pt
+*.pth
+*.onnx
+# HuggingFace cache (managed by the system, not committed)
+# ~/.cache/huggingface/
+
+# ── IDE ───────────────────────────────────────────────────────
+.vscode/settings.json
+.vscode/launch.json
+.idea/
+*.swp
+*.swo
+*.DS_Store
+Thumbs.db
+
+# ── Docker ────────────────────────────────────────────────────
+docker-compose.override.yml
+
+# ── Logs ──────────────────────────────────────────────────────
+*.log
+logs/
+
+# ── ChromaDB local data ───────────────────────────────────────
+chroma_data/
+
+# ── Test artifacts ────────────────────────────────────────────
+.pytest_cache/
+test-results/

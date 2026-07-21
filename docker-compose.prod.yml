@@ -1,0 +1,97 @@
+version: "3.9"
+# Production compose — uses pre-built images from registry
+# Usage: docker compose -f docker-compose.prod.yml up -d
+
+services:
+  api:
+    image: ghcr.io/${GITHUB_REPOSITORY:-tirthch25/smarthire-ai}/backend:${IMAGE_TAG:-latest}
+    container_name: smarthire_api_prod
+    restart: always
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    depends_on:
+      redis:
+        condition: service_healthy
+    command: >
+      uvicorn app.main:app
+      --host 0.0.0.0
+      --port 8000
+      --workers 2
+      --log-level warning
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+
+  celery_worker:
+    image: ghcr.io/${GITHUB_REPOSITORY:-tirthch25/smarthire-ai}/backend:${IMAGE_TAG:-latest}
+    container_name: smarthire_celery_prod
+    restart: always
+    env_file:
+      - .env
+    depends_on:
+      - redis
+    command: >
+      celery -A app.workers.celery_app worker
+      --loglevel=warning
+      --concurrency=2
+      --queues=resume,ats,ai,export,default
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+
+  # ── Redis ─────────────────────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: smarthire_redis_prod
+    restart: always
+    volumes:
+      - redis_prod_data:/data
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  # ── ChromaDB ─────────────────────────────────────────────────────────────
+  chromadb:
+    image: chromadb/chroma:latest
+    container_name: smarthire_chroma_prod
+    restart: always
+    volumes:
+      - chroma_prod_data:/chroma/chroma
+    environment:
+      - IS_PERSISTENT=TRUE
+      - PERSIST_DIRECTORY=/chroma/chroma
+      - ANONYMIZED_TELEMETRY=FALSE
+
+  # ── Nginx Reverse Proxy ────────────────────────────────────────────────────
+  nginx:
+    image: nginx:alpine
+    container_name: smarthire_nginx_prod
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+    depends_on:
+      - api
+
+volumes:
+  redis_prod_data:
+  chroma_prod_data:
+
+networks:
+  default:
+    name: smarthire_prod_network
