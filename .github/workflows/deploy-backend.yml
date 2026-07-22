@@ -16,6 +16,40 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install backend dependencies (excluding heavy ML packages)
+        # We install the full requirements minus torch/transformers/chromadb which
+        # are not needed for running Alembic migrations. This ensures that
+        # app/core/config.py (pydantic-settings) and app/core/database.py load
+        # correctly when alembic/env.py is imported.
+        run: |
+          pip install --upgrade pip
+          grep -v -E "^(torch|sentence-transformers|chromadb|transformers|scikit-learn|pytest|moto|fakeredis|factory-boy|ruff|mypy|flower)==" \
+            backend/requirements.txt > /tmp/alembic-requirements.txt
+          pip install -r /tmp/alembic-requirements.txt
+
+      - name: Run Alembic migrations
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          SECRET_KEY: ${{ secrets.SECRET_KEY }}
+          APP_ENV: production
+          # Dummy values for required settings that aren't used during migration
+          REDIS_URL: redis://localhost:6379/0
+          CELERY_BROKER_URL: redis://localhost:6379/1
+          CELERY_RESULT_BACKEND: redis://localhost:6379/2
+          GEMINI_API_KEY: placeholder
+          AWS_ACCESS_KEY_ID: placeholder
+          AWS_SECRET_ACCESS_KEY: placeholder
+          AWS_S3_BUCKET_NAME: placeholder
+        working-directory: backend
+        run: alembic upgrade head
+
       - name: Trigger Render deploy
         env:
           RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
@@ -24,16 +58,8 @@ jobs:
             curl -X POST "$RENDER_DEPLOY_HOOK_URL" \
               -H "Content-Type: application/json" \
               --fail --silent --show-error
-            echo "Render deploy triggered successfully"
+            echo "✅ Render deploy triggered successfully"
           else
-            echo "RENDER_DEPLOY_HOOK_URL not set, skipping deploy"
+            echo "⚠️ RENDER_DEPLOY_HOOK_URL not set — skipping auto-deploy trigger"
+            echo "   Set this secret in GitHub to enable automatic Render deploys."
           fi
-
-      - name: Run Alembic migrations
-        env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
-          SECRET_KEY: ${{ secrets.SECRET_KEY }}
-        run: |
-          pip install alembic asyncpg psycopg2-binary sqlalchemy
-          cd backend && alembic upgrade head
-        continue-on-error: false

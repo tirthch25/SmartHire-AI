@@ -1,11 +1,14 @@
 """
-SmartHire AI — AWS S3 Client
+SmartHire AI — S3-Compatible Storage Client
 
 Provides a thin wrapper around boto3 for:
 - Uploading files (PDF resumes, generated PDFs)
 - Generating presigned GET URLs (temporary download links)
 - Deleting objects
-- Building consistent S3 key paths
+- Building consistent object key paths
+
+Supports both AWS S3 and Cloudflare R2 (S3-compatible, free tier).
+Set STORAGE_ENDPOINT_URL in your environment to switch to R2.
 """
 
 import uuid
@@ -21,13 +24,23 @@ logger = structlog.get_logger(__name__)
 
 
 def _get_s3_client():
-    """Create and return a boto3 S3 client using configured credentials."""
-    return boto3.client(
-        "s3",
-        region_name=settings.AWS_REGION,
-        aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
-        aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY,
-    )
+    """
+    Create and return a boto3 S3 client.
+
+    Supports both AWS S3 and S3-compatible providers (e.g. Cloudflare R2).
+    When STORAGE_ENDPOINT_URL is set, requests are routed to that endpoint
+    instead of AWS — enabling free-tier Cloudflare R2 usage.
+    """
+    kwargs = {
+        "region_name": settings.AWS_REGION,
+        "aws_access_key_id": settings.AWS_ACCESS_KEY_ID,
+        "aws_secret_access_key": settings.AWS_SECRET_ACCESS_KEY,
+    }
+    # Cloudflare R2 (and other S3-compatible providers) require a custom endpoint.
+    if settings.STORAGE_ENDPOINT_URL:
+        kwargs["endpoint_url"] = settings.STORAGE_ENDPOINT_URL
+
+    return boto3.client("s3", **kwargs)
 
 
 # ── Key Builders ─────────────────────────────────────────────────────────────

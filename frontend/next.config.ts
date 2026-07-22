@@ -1,15 +1,26 @@
 import type { NextConfig } from "next";
 
-const nextConfig: NextConfig = {
-  // Required for Docker multi-stage build (frontend/Dockerfile uses standalone output)
-  output: "standalone",
+// Standalone output is required for Docker/self-hosted deployments.
+// Vercel handles its own bundling, so we disable standalone there.
+// Vercel automatically sets VERCEL=1 during build.
+const isVercel = process.env.VERCEL === "1";
 
-  // Allow images from S3 and localhost during development
+const nextConfig: NextConfig = {
+  // Only use standalone output for Docker; Vercel does not support it.
+  ...(isVercel ? {} : { output: "standalone" }),
+
+  // Allow images from S3, Render-hosted backend, and localhost during development
   images: {
     remotePatterns: [
       {
         protocol: "https",
         hostname: "*.amazonaws.com",
+        pathname: "/**",
+      },
+      {
+        // Render backend (e.g. smarthire-api.onrender.com)
+        protocol: "https",
+        hostname: "*.onrender.com",
         pathname: "/**",
       },
       {

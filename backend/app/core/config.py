@@ -6,7 +6,7 @@ Provides strong typing, validation, and defaults for all configuration values.
 """
 
 from functools import lru_cache
-from typing import List
+from typing import List, Optional
 
 from pydantic import AnyHttpUrl, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -66,11 +66,15 @@ class Settings(BaseSettings):
     CELERY_TASK_SOFT_TIME_LIMIT: int = 120  # seconds
     CELERY_TASK_TIME_LIMIT: int = 180       # hard limit
 
-    # ── AWS S3 ────────────────────────────────────────────────
+    # ── S3-Compatible Storage (AWS S3 or Cloudflare R2) ──────
+    # For Cloudflare R2, set STORAGE_ENDPOINT_URL to:
+    #   https://<account_id>.r2.cloudflarestorage.com
+    # For AWS S3, leave STORAGE_ENDPOINT_URL unset (or empty).
     AWS_ACCESS_KEY_ID: str = ""
     AWS_SECRET_ACCESS_KEY: str = ""
-    AWS_REGION: str = "us-east-1"
+    AWS_REGION: str = "auto"          # R2 uses "auto"; AWS uses e.g. "us-east-1"
     AWS_S3_BUCKET_NAME: str = "smarthire-ai"
+    STORAGE_ENDPOINT_URL: Optional[str] = None  # Set for R2; leave empty for AWS S3
     S3_PRESIGNED_URL_EXPIRY: int = 3600  # 1 hour
 
     # S3 folder prefixes

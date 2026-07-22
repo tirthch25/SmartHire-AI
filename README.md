@@ -94,7 +94,7 @@ Instantly see which skills are missing for a target role, ranked by importance, 
 Generates 4 categories × 3 difficulty levels of interview questions with hints, sample answers, and follow-up questions — all tailored to your resume + job description.
 
 ### ✉️ Cover Letter Generator
-Choose your tone (Professional · Enthusiastic · Concise), get a beautifully written cover letter, edit inline, and export as a polished PDF.
+Choose your tone (Professional · Confident · Enthusiastic · Formal), get a beautifully written cover letter, edit inline, and export as a polished PDF.
 
 </td>
 </tr>
@@ -143,10 +143,10 @@ Track your ATS score trends over time, see component-level averages, monitor imp
 │  └─────────────────────────────────────────────────────────────┘│
 └─────────────────────────────────────────────────────────────────┘
          │              │              │              │
-    ┌────▼────┐   ┌─────▼────┐  ┌────▼────┐  ┌─────▼────┐
-    │PostgreSQL│   │  Redis   │  │  AWS S3 │  │ ChromaDB │
-    │  (Neon) │   │ Cache +  │  │  Files  │  │Embeddings│
-    │   ORM   │   │  Queue   │  │  Store  │  │  Vector  │
+    ┌────▼────┐   ┌─────▼────┐  ┌─────▼────┐  ┌─────▼────┐
+    │PostgreSQL│   │  Redis   │  │Cloudflare│  │ ChromaDB │
+    │  (Neon) │   │ Cache +  │  │   R2     │  │Embeddings│
+    │   ORM   │   │  Queue   │  │  Files  │  │  Vector  │
     └─────────┘   └──────────┘  └─────────┘  └──────────┘
 ```
 
@@ -157,7 +157,7 @@ Track your ATS score trends over time, see component-level averages, monitor imp
         │
         ▼
   FastAPI endpoint
-  ├─ Upload to AWS S3
+  ├─ Upload to Cloudflare R2
   └─ Create DB record (status: pending)
         │
         ▼
@@ -220,7 +220,7 @@ Score Bands:
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-4169E1?style=for-the-badge&logo=postgresql&logoColor=white)
 ![Redis](https://img.shields.io/badge/Redis-DC382D?style=for-the-badge&logo=redis&logoColor=white)
 ![Celery](https://img.shields.io/badge/Celery-37814A?style=for-the-badge&logo=celery&logoColor=white)
-![AWS](https://img.shields.io/badge/AWS_S3-FF9900?style=for-the-badge&logo=amazons3&logoColor=white)
+![Cloudflare R2](https://img.shields.io/badge/Cloudflare_R2-F38020?style=for-the-badge&logo=cloudflare&logoColor=white)
 
 ### AI / ML
 ![Google Gemini](https://img.shields.io/badge/Gemini_2.0_Flash-4285F4?style=for-the-badge&logo=google&logoColor=white)
@@ -278,23 +278,24 @@ SmartHire-AI/
 │
 ├── ⚛️  frontend/
 │   ├── src/
-│   │   ├── app/                  # 7 Next.js App Router pages
+│   │   ├── app/                  # 8 Next.js App Router pages
 │   │   │   ├── page.tsx          # Landing / home
 │   │   │   ├── login/
 │   │   │   ├── dashboard/
 │   │   │   ├── resume/
 │   │   │   ├── jobs/
 │   │   │   ├── interview/
-│   │   │   └── cover-letter/
+│   │   │   ├── cover-letter/
+│   │   │   └── profile/          # Account settings & usage stats
 │   │   ├── components/           # AppShell, Sidebar, Toast, ScoreRing…
 │   │   └── lib/                  # API client, auth helpers
 │   ├── Dockerfile
 │   └── package.json
 │
 ├── 🧪 tests/
-│   └── backend/                  # 7 pytest test suites
+│   └── backend/                  # 6 pytest test suites
 │
-├── 📚 docs/                      # Architecture, API, DB Schema, Setup
+├── 📚 docs/                      # Architecture, API, DB Schema, Deployment, Setup Guide
 ├── 🔧 .github/workflows/         # CI + backend + frontend deploy
 ├── 🐳 docker-compose.yml
 ├── 🐳 docker-compose.prod.yml
@@ -311,7 +312,7 @@ SmartHire-AI/
 Before you begin, make sure you have:
 - 🐳 [Docker Desktop](https://www.docker.com/products/docker-desktop/)
 - 🔑 [Google Gemini API key](https://aistudio.google.com/app/apikey) (free tier works)
-- ☁️ AWS account with an S3 bucket
+- ☁️ [Cloudflare account](https://dash.cloudflare.com) with an R2 bucket (free tier: 10 GB, zero egress)
 - 🐘 PostgreSQL connection string ([Neon](https://neon.tech) free tier recommended)
 
 ### 1️⃣ Clone & Configure
@@ -324,7 +325,7 @@ cd SmartHire-AI
 cp .env.example .env
 
 # Open .env and fill in your credentials
-# (at minimum: GEMINI_API_KEY, DATABASE_URL, AWS keys)
+# (at minimum: GEMINI_API_KEY, DATABASE_URL, STORAGE_ENDPOINT_URL, R2 keys)
 ```
 
 ### 2️⃣ Launch All Services
@@ -387,6 +388,8 @@ celery -A app.workers.celery_app flower --port=5555
 
 ### ⚛️ Frontend
 
+> Requires **Node.js 20 LTS**
+
 ```bash
 cd frontend
 npm install
@@ -413,10 +416,12 @@ REDIS_URL=redis://localhost:6379/0
 CELERY_BROKER_URL=redis://localhost:6379/1
 CELERY_RESULT_BACKEND=redis://localhost:6379/2
 
-# ── AWS S3 ─────────────────────────────────────────────────────
-AWS_ACCESS_KEY_ID=your-access-key-id
-AWS_SECRET_ACCESS_KEY=your-secret-access-key
-AWS_REGION=us-east-1
+# ── Cloudflare R2 (S3-compatible, free tier) ───────────────────
+# Free: 10 GB storage · 1M writes/mo · 10M reads/mo · zero egress
+STORAGE_ENDPOINT_URL=https://<ACCOUNT_ID>.r2.cloudflarestorage.com
+AWS_ACCESS_KEY_ID=your-r2-access-key-id
+AWS_SECRET_ACCESS_KEY=your-r2-secret-access-key
+AWS_REGION=auto
 AWS_S3_BUCKET_NAME=smarthire-ai
 
 # ── Google Gemini AI ───────────────────────────────────────────
@@ -436,6 +441,8 @@ ALLOWED_ORIGINS=http://localhost:3000,https://your-domain.vercel.app
 > openssl rand -hex 32
 > ```
 
+> 📁 **File Storage:** The project uses **Cloudflare R2** instead of AWS S3. Despite the `AWS_` prefixed variable names, boto3 routes all requests to R2 via `STORAGE_ENDPOINT_URL`. R2 offers **zero egress fees** vs AWS S3's ~$0.09/GB. See [`docs/deployment.md`](docs/deployment.md) for the full R2 setup walkthrough.
+
 ---
 
 ## 📡 API Reference
@@ -449,20 +456,33 @@ Full interactive docs at **`/docs`** (Swagger UI) · **`/redoc`** (ReDoc) when t
 | `POST` | `/api/v1/auth/register` | Create new user account |
 | `POST` | `/api/v1/auth/login` | Authenticate → access + refresh tokens |
 | `POST` | `/api/v1/auth/refresh` | Rotate access token |
+| `POST` | `/api/v1/auth/logout` | Invalidate refresh token |
 | `GET`  | `/api/v1/auth/me` | Get current user profile |
 | `POST` | `/api/v1/resume/upload` | Upload PDF resume (→ Celery pipeline) |
 | `GET`  | `/api/v1/resume/list` | List all user resumes |
+| `GET`  | `/api/v1/resume/{id}` | Get resume metadata & parsed data |
 | `DELETE` | `/api/v1/resume/{id}` | Delete a resume |
+| `GET`  | `/api/v1/resume/{id}/download` | Presigned R2 URL to download PDF |
 | `POST` | `/api/v1/ats/analyze` | Trigger ATS scoring (→ Celery) |
 | `GET`  | `/api/v1/ats/score/{resume_id}` | Fetch latest ATS score breakdown |
+| `GET`  | `/api/v1/ats/status/{task_id}` | Poll Celery task status |
+| `GET`  | `/api/v1/ats/history` | List all analyses (paginated) |
+| `GET`  | `/api/v1/ats/export/{analysis_id}` | Export ATS report as PDF |
 | `POST` | `/api/v1/job/create` | Save a job description |
+| `GET`  | `/api/v1/job/list` | List saved jobs |
+| `DELETE` | `/api/v1/job/{job_id}` | Delete a job |
 | `POST` | `/api/v1/job/match` | Get semantic match score |
 | `GET`  | `/api/v1/job/skill-gap` | Skill gap analysis with resources |
 | `POST` | `/api/v1/interview/generate` | Generate interview questions (→ Celery) |
+| `GET`  | `/api/v1/interview/{session_id}` | Get generated questions |
+| `GET`  | `/api/v1/interview/list` | List all interview sessions |
 | `POST` | `/api/v1/cover-letter/generate` | Generate cover letter (→ Celery) |
+| `PUT`  | `/api/v1/cover-letter/{id}` | Edit a cover letter |
+| `GET`  | `/api/v1/cover-letter/list` | List all cover letters |
 | `GET`  | `/api/v1/cover-letter/{id}/export` | Export cover letter as PDF |
 | `GET`  | `/api/v1/dashboard/stats` | Dashboard summary stats |
 | `GET`  | `/api/v1/dashboard/analytics` | Score trends + chart data |
+| `GET`  | `/api/v1/dashboard/activity` | Recent activity feed |
 | `GET`  | `/health` | Service health check |
 
 > 🔒 All non-auth endpoints require: `Authorization: Bearer <access_token>`
@@ -496,12 +516,12 @@ pytest -m "not integration"
 
 | Module | Tests |
 |---|---|
-| `test_auth.py` | Register, login, refresh, JWT validation |
-| `test_resume.py` | Upload, list, delete, parsing pipeline |
-| `test_ats.py` | Score components, weighted calculation |
-| `test_job_match.py` | Semantic matching, skill overlap |
+| `test_auth.py` | Register, login, refresh, logout, JWT validation |
+| `test_resume.py` | Upload, list, delete, download, parsing pipeline |
+| `test_ats.py` | Score components, weighted calculation, PDF export |
+| `test_job_match.py` | Semantic matching, skill overlap, skill gap |
 | `test_cover_letter.py` | Generation, tone customization, PDF export |
-| `test_dashboard.py` | Stats aggregation, analytics trends |
+| `test_dashboard.py` | Stats aggregation, analytics trends, activity feed |
 
 ---
 
@@ -510,35 +530,45 @@ pytest -m "not integration"
 ### 🔧 Backend → Render
 
 1. Create a new **Web Service** on [Render](https://render.com)
-2. Connect your GitHub repository
+2. Connect your GitHub repository — Render auto-detects `render.yaml`
 3. **Build Command:** `pip install -r backend/requirements.txt`
 4. **Start Command:** `uvicorn app.main:app --host 0.0.0.0 --port $PORT`
-5. Add all env vars from `.env.example` in Render dashboard
+5. Add all env vars from `.env.example` in the Render dashboard
 6. Set `RENDER_DEPLOY_HOOK_URL` in GitHub Secrets for auto-deploy on push
 
 ### 🌐 Frontend → Vercel
 
 1. Import your GitHub repo at [vercel.com/new](https://vercel.com/new)
 2. Set **Root Directory** → `frontend`
-3. Add env var: `NEXT_PUBLIC_API_URL=https://your-render-app.onrender.com/api/v1`
+3. Add env vars: `NEXT_PUBLIC_API_URL=https://your-render-app.onrender.com/api/v1`
 4. Set GitHub Secrets: `VERCEL_TOKEN`, `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID`
 
 ### 🐘 Database → Neon
 
 1. Create a free project at [neon.tech](https://neon.tech)
-2. Copy connection string → `DATABASE_URL` in your env
+2. Copy connection string → `DATABASE_URL` in your env (use `postgresql+asyncpg://` scheme)
 3. Apply schema: `alembic upgrade head`
+
+### ☁️ File Storage → Cloudflare R2
+
+1. Sign in to [dash.cloudflare.com](https://dash.cloudflare.com) → **R2 Object Storage** → **Create bucket** (`smarthire-ai`)
+2. Go to **R2 → Manage R2 API Tokens** → create a token with **Object Read & Write** on your bucket
+3. Copy your **Account ID**, **Access Key ID**, and **Secret Access Key**
+4. Set env vars: `STORAGE_ENDPOINT_URL`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_S3_BUCKET_NAME`
+
+> See [`docs/deployment.md`](docs/deployment.md) for the complete step-by-step production deployment guide.
 
 ### 🔑 Required GitHub Secrets
 
 | Secret | Used by |
 |---|---|
 | `SECRET_KEY` | Backend JWT signing |
-| `DATABASE_URL` | Production PostgreSQL |
+| `DATABASE_URL` | Production PostgreSQL (Neon) |
 | `GEMINI_API_KEY` | All AI features |
-| `AWS_ACCESS_KEY_ID` | S3 file storage |
-| `AWS_SECRET_ACCESS_KEY` | S3 file storage |
-| `REDIS_URL` | Cache + task queue |
+| `STORAGE_ENDPOINT_URL` | Cloudflare R2 endpoint |
+| `AWS_ACCESS_KEY_ID` | R2 access key (S3-compatible) |
+| `AWS_SECRET_ACCESS_KEY` | R2 secret key (S3-compatible) |
+| `REDIS_URL` | Cache + task queue (Upstash) |
 | `RENDER_DEPLOY_HOOK_URL` | Backend auto-deploy |
 | `VERCEL_TOKEN` | Frontend deploy |
 | `VERCEL_ORG_ID` | Frontend deploy |
