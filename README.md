@@ -330,14 +330,16 @@ cp .env.example .env
 
 ### 2️⃣ Launch All Services
 
+The `docker-compose.yml` now includes the **Next.js frontend** — everything starts with one command:
+
 ```bash
 docker compose up --build
 ```
 
 | 🟢 Service | Port | URL |
 |---|---|---|
-| ⚡ FastAPI API | `8000` | http://localhost:8000 |
 | 🌐 Next.js Frontend | `3000` | http://localhost:3000 |
+| ⚡ FastAPI API | `8000` | http://localhost:8000 |
 | 🌸 Celery Flower | `5555` | http://localhost:5555 |
 | 🐘 PostgreSQL | `5432` | — |
 | ⚡ Redis | `6379` | — |
@@ -433,7 +435,8 @@ CHROMA_HOST=localhost
 CHROMA_PORT=8001
 
 # ── CORS ───────────────────────────────────────────────────────
-ALLOWED_ORIGINS=http://localhost:3000,https://your-domain.vercel.app
+# Use a JSON array for multiple origins
+ALLOWED_ORIGINS=["http://localhost:3000","https://your-domain.vercel.app"]
 ```
 
 > 💡 **Tip:** Generate a secure `SECRET_KEY` with:
