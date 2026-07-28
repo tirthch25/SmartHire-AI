@@ -5,7 +5,7 @@
 ### *Land your dream job — before anyone else does.*
 
 <p align="center">
-  <img src="https://readme-typing-svg.demolab.com?font=Fira+Code&size=22&pause=1000&color=6366F1&center=true&vCenter=true&width=600&lines=AI-Powered+ATS+Resume+Analyzer;Semantic+Job+Matching+Engine;Interview+Prep+%26+Cover+Letter+Generator;Built+with+FastAPI+%2B+Next.js+%2B+Gemini" alt="Typing SVG" />
+  <img src="https://readme-typing-svg.demolab.com?font=Fira+Code&size=22&pause=1000&color=6366F1&center=true&vCenter=true&width=600&lines=AI-Powered+ATS+Resume+Analyzer;Semantic+Job+Matching+Engine;Interview+Prep+%26+Cover+Letter+Generator;Built+with+FastAPI+%2B+Next.js+16+%2B+Gemini" alt="Typing SVG" />
 </p>
 
 <p align="center">
@@ -13,7 +13,8 @@
     <img src="https://github.com/tirthch25/SmartHire-AI/actions/workflows/ci.yml/badge.svg" alt="CI Status"/>
   </a>
   <img src="https://img.shields.io/badge/Python-3.11-3776AB?style=flat&logo=python&logoColor=white"/>
-  <img src="https://img.shields.io/badge/Next.js-14-000000?style=flat&logo=nextdotjs&logoColor=white"/>
+  <img src="https://img.shields.io/badge/Next.js-16-000000?style=flat&logo=nextdotjs&logoColor=white"/>
+  <img src="https://img.shields.io/badge/React-19-61DAFB?style=flat&logo=react&logoColor=black"/>
   <img src="https://img.shields.io/badge/FastAPI-0.111-009688?style=flat&logo=fastapi&logoColor=white"/>
   <img src="https://img.shields.io/badge/Gemini-2.0_Flash-4285F4?style=flat&logo=google&logoColor=white"/>
   <img src="https://img.shields.io/badge/Docker-Ready-2496ED?style=flat&logo=docker&logoColor=white"/>
@@ -120,7 +121,7 @@ Track your ATS score trends over time, see component-level averages, monitor imp
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                   Next.js 14 Frontend (Vercel)                  │
+│                   Next.js 16 Frontend (Vercel)                  │
 │  ┌──────────┐  ┌──────────┐  ┌───────────┐  ┌──────────────┐  │
 │  │Dashboard │  │  Resume  │  │   Jobs /  │  │  Interview / │  │
 │  │Analytics │  │  Upload  │  │  Matching │  │ Cover Letter │  │
@@ -228,7 +229,8 @@ Score Bands:
 ![ChromaDB](https://img.shields.io/badge/ChromaDB-Vector_DB-8B5CF6?style=for-the-badge)
 
 ### Frontend
-![Next.js](https://img.shields.io/badge/Next.js_14-000000?style=for-the-badge&logo=nextdotjs&logoColor=white)
+![Next.js](https://img.shields.io/badge/Next.js_16-000000?style=for-the-badge&logo=nextdotjs&logoColor=white)
+![React](https://img.shields.io/badge/React_19-61DAFB?style=for-the-badge&logo=react&logoColor=black)
 ![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=for-the-badge&logo=typescript&logoColor=white)
 ![TailwindCSS](https://img.shields.io/badge/Tailwind_CSS-06B6D4?style=for-the-badge&logo=tailwindcss&logoColor=white)
 
@@ -276,7 +278,7 @@ SmartHire-AI/
 │   ├── Dockerfile
 │   └── requirements.txt
 │
-├── ⚛️  frontend/
+├── ⚛️  frontend/                  # Next.js 16 + React 19 + TypeScript
 │   ├── src/
 │   │   ├── app/                  # 8 Next.js App Router pages
 │   │   │   ├── page.tsx          # Landing / home
@@ -390,7 +392,7 @@ celery -A app.workers.celery_app flower --port=5555
 
 ### ⚛️ Frontend
 
-> Requires **Node.js 20 LTS**
+> Requires **Node.js 20 LTS** · Next.js 16 · React 19
 
 ```bash
 cd frontend
@@ -602,7 +604,7 @@ Distributed under the **MIT License**. See [LICENSE](LICENSE) for details.
 
 <div align="center">
 
-**Built with ❤️ by [Tirth Chauhan](https://github.com/tirthch25)**
+**Built with ❤️ by [Tirth Chankeshwara](https://github.com/tirthch25)**
 
 *If SmartHire AI helped you land a job, give it a ⭐ — it means the world!*
 
