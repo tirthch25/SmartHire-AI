@@ -25,9 +25,9 @@ pydantic==2.10.3
 pydantic-settings==2.6.1
 python-dotenv==1.0.1
 
-# ── AWS S3 ───────────────────────────────────────────────────
-boto3==1.35.88
-botocore==1.35.88
+# ── Vercel Blob Storage (replaces boto3/S3) ──────────────────
+# Uses httpx (already included above) for HTTP-based blob operations
+# No additional package needed — httpx handles all Blob API calls
 
 # ── PDF Processing ───────────────────────────────────────────
 pdfplumber==0.11.4
@@ -63,7 +63,7 @@ pytest==8.3.4
 pytest-asyncio==0.24.0
 pytest-cov==6.0.0
 httpx==0.28.1
-moto[s3]==5.0.22
+moto==5.0.22          # kept for any future S3-compatible mocking if needed
 fakeredis==2.26.2
 factory-boy==3.3.1
 

@@ -26,7 +26,7 @@ from reportlab.platypus import (
     TableStyle,
 )
 
-from app.core.s3_client import (
+from app.core.blob_client import (
     build_cover_letter_key,
     build_report_key,
     generate_presigned_url,

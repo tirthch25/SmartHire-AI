@@ -67,9 +67,7 @@ jobs:
           CELERY_RESULT_BACKEND: redis://localhost:6379/2
           SECRET_KEY: ci-secret-key-at-least-32-characters-long
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          AWS_S3_BUCKET_NAME: smarthire-test
+          BLOB_READ_WRITE_TOKEN: ${{ secrets.BLOB_READ_WRITE_TOKEN }}
           APP_ENV: testing
         run: pytest tests/ -v --tb=short --cov=app --cov-report=xml
 

@@ -39,14 +39,12 @@ jobs:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           SECRET_KEY: ${{ secrets.SECRET_KEY }}
           APP_ENV: production
-          # Dummy values for required settings that aren't used during migration
+          # Dummy values for settings that are validated at startup but unused during migration
           REDIS_URL: redis://localhost:6379/0
           CELERY_BROKER_URL: redis://localhost:6379/1
           CELERY_RESULT_BACKEND: redis://localhost:6379/2
           GEMINI_API_KEY: placeholder
-          AWS_ACCESS_KEY_ID: placeholder
-          AWS_SECRET_ACCESS_KEY: placeholder
-          AWS_S3_BUCKET_NAME: placeholder
+          BLOB_READ_WRITE_TOKEN: placeholder
         working-directory: backend
         run: alembic upgrade head
 

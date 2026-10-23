@@ -149,11 +149,11 @@ class TestUpdateCoverLetter:
         await db.flush()
         resp = await client.put(
             f"/api/v1/cover-letter/{letter.id}",
-            json={"content": "Updated content that is much better."},
+            json={"content": "Updated content that is much better and now meets the minimum length requirement."},
             headers=auth_headers,
         )
         assert resp.status_code == 200
-        assert resp.json()["content"] == "Updated content that is much better."
+        assert resp.json()["content"] == "Updated content that is much better and now meets the minimum length requirement."
 
     async def test_update_clears_s3_key(self, client: AsyncClient, auth_headers, db, test_user, sample_resume, sample_job):
         """Editing content should invalidate any cached PDF export."""
@@ -170,7 +170,7 @@ class TestUpdateCoverLetter:
         await db.flush()
         resp = await client.put(
             f"/api/v1/cover-letter/{letter.id}",
-            json={"content": "Edited content."},
+            json={"content": "Edited content that is now long enough to pass the minimum validation check."},
             headers=auth_headers,
         )
         assert resp.status_code == 200
@@ -184,7 +184,7 @@ class TestExportCoverLetter:
     async def test_export_generates_pdf(self, mock_pdf, client: AsyncClient, auth_headers, db, test_user, sample_resume, sample_job):
         mock_pdf.export_cover_letter.return_value = (
             "cover-letters/user/letter.pdf",
-            "https://s3.amazonaws.com/bucket/letter.pdf?token=abc",
+            "https://blob.vercel-storage.com/bucket/letter.pdf?token=abc",
         )
         letter = CoverLetter(
             id=uuid.uuid4(),
@@ -200,7 +200,7 @@ class TestExportCoverLetter:
         assert resp.status_code == 200
         data = resp.json()
         assert "download_url" in data
-        assert "s3.amazonaws.com" in data["download_url"]
+        assert "blob.vercel-storage.com" in data["download_url"]
 
     async def test_export_empty_content_rejected(self, client: AsyncClient, auth_headers, db, test_user, sample_resume, sample_job):
         letter = CoverLetter(

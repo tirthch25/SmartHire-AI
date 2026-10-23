@@ -136,17 +136,8 @@ class TestDeleteResume:
     """DELETE /api/v1/resume/{resume_id}"""
 
     @patch("app.api.v1.resume.delete_file", return_value=True)
-    async def test_delete_success(self, mock_delete, client: AsyncClient, auth_headers, db):
-        # Create a disposable resume
-        resume = Resume(
-            id=uuid.uuid4(),
-            user_id=(await db.get_bind()).info.get("test_user_id", uuid.uuid4()),
-            filename="delete_me.pdf",
-            s3_key="resumes/test/delete_me.pdf",
-            file_size=5000,
-            status="completed",
-        )
-        # Simpler: just use sample_resume — we test status 404 after deletion
+    async def test_delete_success(self, mock_delete, client: AsyncClient, auth_headers):
+        # Deleting a non-existent UUID should return 404
         fake_id = uuid.uuid4()
         resp = await client.delete(f"/api/v1/resume/{fake_id}", headers=auth_headers)
         assert resp.status_code == 404  # Doesn't exist → 404

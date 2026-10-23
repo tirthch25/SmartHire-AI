@@ -30,12 +30,14 @@ services:
     env_file:
       - .env
     environment:
+      # Override service hostnames for Docker networking
       - DATABASE_URL=postgresql+asyncpg://smarthire:smarthire@postgres:5432/smarthire_db
       - REDIS_URL=redis://redis:6379/0
       - CELERY_BROKER_URL=redis://redis:6379/1
       - CELERY_RESULT_BACKEND=redis://redis:6379/2
       - CHROMA_HOST=chromadb
       - CHROMA_PORT=8000
+      # BLOB_READ_WRITE_TOKEN is loaded from .env via env_file above
     depends_on:
       postgres:
         condition: service_healthy
@@ -65,12 +67,14 @@ services:
     env_file:
       - .env
     environment:
+      # Override service hostnames for Docker networking
       - DATABASE_URL=postgresql+asyncpg://smarthire:smarthire@postgres:5432/smarthire_db
       - REDIS_URL=redis://redis:6379/0
       - CELERY_BROKER_URL=redis://redis:6379/1
       - CELERY_RESULT_BACKEND=redis://redis:6379/2
       - CHROMA_HOST=chromadb
       - CHROMA_PORT=8000
+      # BLOB_READ_WRITE_TOKEN is loaded from .env via env_file above
     depends_on:
       - redis
       - postgres

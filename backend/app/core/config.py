@@ -66,21 +66,18 @@ class Settings(BaseSettings):
     CELERY_TASK_SOFT_TIME_LIMIT: int = 120  # seconds
     CELERY_TASK_TIME_LIMIT: int = 180       # hard limit
 
-    # ── S3-Compatible Storage (AWS S3 or Cloudflare R2) ──────
-    # For Cloudflare R2, set STORAGE_ENDPOINT_URL to:
-    #   https://<account_id>.r2.cloudflarestorage.com
-    # For AWS S3, leave STORAGE_ENDPOINT_URL unset (or empty).
-    AWS_ACCESS_KEY_ID: str = ""
-    AWS_SECRET_ACCESS_KEY: str = ""
-    AWS_REGION: str = "auto"          # R2 uses "auto"; AWS uses e.g. "us-east-1"
-    AWS_S3_BUCKET_NAME: str = "smarthire-ai"
-    STORAGE_ENDPOINT_URL: Optional[str] = None  # Set for R2; leave empty for AWS S3
-    S3_PRESIGNED_URL_EXPIRY: int = 3600  # 1 hour
+    # ── Vercel Blob File Storage ──────────────────────────────
+    # Get from: Vercel Dashboard → Storage → Blob → your store → Connect → Token
+    # Format:   vercel_blob_rw_xxxxxxxxxxxxxxxxx
+    BLOB_READ_WRITE_TOKEN: str = ""
 
-    # S3 folder prefixes
-    S3_RESUMES_PREFIX: str = "resumes"
-    S3_REPORTS_PREFIX: str = "reports"
-    S3_COVER_LETTERS_PREFIX: str = "cover-letters"
+    # Blob folder path prefixes (used by blob_client key builders)
+    BLOB_RESUMES_PREFIX: str = "resumes"
+    BLOB_REPORTS_PREFIX: str = "reports"
+    BLOB_COVER_LETTERS_PREFIX: str = "cover-letters"
+
+    # URL expiry in seconds (Vercel Blob URLs don't expire, kept for API compat)
+    BLOB_PRESIGNED_URL_EXPIRY: int = 3600
 
     # ── AI / ML ───────────────────────────────────────────────
     GEMINI_API_KEY: str = ""

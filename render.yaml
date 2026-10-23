@@ -59,19 +59,9 @@ services:
       - key: CELERY_TASK_TIME_LIMIT
         value: 180
 
-      # ── Cloudflare R2 (Free S3-Compatible Storage) ─────────────────────
-      - key: STORAGE_ENDPOINT_URL
-        sync: false              # https://<account_id>.r2.cloudflarestorage.com
-      - key: AWS_ACCESS_KEY_ID
-        sync: false              # R2 API token Access Key ID
-      - key: AWS_SECRET_ACCESS_KEY
-        sync: false              # R2 API token Secret
-      - key: AWS_REGION
-        value: auto
-      - key: AWS_S3_BUCKET_NAME
-        sync: false
-      - key: S3_PRESIGNED_URL_EXPIRY
-        value: 3600
+      # ── Vercel Blob File Storage ──────────────────────────────────────────
+      - key: BLOB_READ_WRITE_TOKEN
+        sync: false              # Get from: Vercel Dashboard → Storage → Blob → Token
 
       # ── Google Gemini AI ──────────────────────────────────────────────────
       - key: GEMINI_API_KEY
@@ -126,15 +116,7 @@ services:
         sync: false
       - key: GEMINI_API_KEY
         sync: false
-      - key: STORAGE_ENDPOINT_URL
-        sync: false
-      - key: AWS_ACCESS_KEY_ID
-        sync: false
-      - key: AWS_SECRET_ACCESS_KEY
-        sync: false
-      - key: AWS_REGION
-        value: auto
-      - key: AWS_S3_BUCKET_NAME
+      - key: BLOB_READ_WRITE_TOKEN
         sync: false
       - key: SENTENCE_TRANSFORMER_MODEL
         value: all-MiniLM-L6-v2

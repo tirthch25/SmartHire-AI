@@ -60,12 +60,12 @@ async def _get_resume_or_404(db: AsyncSession, resume_id: str, user_id: str) -> 
 
 async def _parse_job_in_background(job_id: str, description: str) -> None:
     """Parse job description with Gemini in background (called as BackgroundTask)."""
-    import asyncio
-    from app.core.database import AsyncSessionFactory
-    from app.services.resume_parser import resume_parser
-    from app.services.embedding_service import embedding_service
-
     try:
+        import asyncio  # noqa: F401
+        from app.core.database import AsyncSessionFactory
+        from app.services.resume_parser import resume_parser
+        from app.services.embedding_service import embedding_service
+
         parsed_data = resume_parser.extract_job_entities(description)
 
         async with AsyncSessionFactory() as session:

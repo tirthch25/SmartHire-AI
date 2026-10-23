@@ -88,7 +88,7 @@ def process_resume_upload(self: Task, resume_id: str) -> dict:
     """
     db = None
     try:
-        from app.core.s3_client import download_bytes
+        from app.core.blob_client import download_bytes
         from app.models.resume import Resume
         from app.services.embedding_service import embedding_service
         from app.services.pdf_parser import pdf_parser

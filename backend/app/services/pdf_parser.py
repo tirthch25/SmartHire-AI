@@ -17,7 +17,7 @@ import pdfplumber
 import structlog
 
 from app.core.config import settings
-from app.core.s3_client import build_resume_key, upload_file
+from app.core.blob_client import build_resume_key, upload_file
 
 logger = structlog.get_logger(__name__)
 

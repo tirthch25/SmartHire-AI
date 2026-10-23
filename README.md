@@ -221,7 +221,7 @@ Score Bands:
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-4169E1?style=for-the-badge&logo=postgresql&logoColor=white)
 ![Redis](https://img.shields.io/badge/Redis-DC382D?style=for-the-badge&logo=redis&logoColor=white)
 ![Celery](https://img.shields.io/badge/Celery-37814A?style=for-the-badge&logo=celery&logoColor=white)
-![Cloudflare R2](https://img.shields.io/badge/Cloudflare_R2-F38020?style=for-the-badge&logo=cloudflare&logoColor=white)
+![Vercel Blob](https://img.shields.io/badge/Vercel_Blob-000000?style=for-the-badge&logo=vercel&logoColor=white)
 
 ### AI / ML
 ![Google Gemini](https://img.shields.io/badge/Gemini_2.0_Flash-4285F4?style=for-the-badge&logo=google&logoColor=white)
@@ -314,7 +314,7 @@ SmartHire-AI/
 Before you begin, make sure you have:
 - 🐳 [Docker Desktop](https://www.docker.com/products/docker-desktop/)
 - 🔑 [Google Gemini API key](https://aistudio.google.com/app/apikey) (free tier works)
-- ☁️ [Cloudflare account](https://dash.cloudflare.com) with an R2 bucket (free tier: 10 GB, zero egress)
+- ▲ [Vercel account](https://vercel.com) with a Blob store created (free tier: 500 MB)
 - 🐘 PostgreSQL connection string ([Neon](https://neon.tech) free tier recommended)
 
 ### 1️⃣ Clone & Configure
@@ -415,18 +415,14 @@ DEBUG=true
 # ── Database (Neon recommended) ────────────────────────────────
 DATABASE_URL=postgresql+asyncpg://user:pass@host/smarthire_db?sslmode=require
 
-# ── Redis ──────────────────────────────────────────────────────
-REDIS_URL=redis://localhost:6379/0
-CELERY_BROKER_URL=redis://localhost:6379/1
-CELERY_RESULT_BACKEND=redis://localhost:6379/2
+# ── Redis (Upstash recommended) ────────────────────────────────
+REDIS_URL=rediss://default:password@host:6379
+CELERY_BROKER_URL=rediss://default:password@host:6379/1
+CELERY_RESULT_BACKEND=rediss://default:password@host:6379/2
 
-# ── Cloudflare R2 (S3-compatible, free tier) ───────────────────
-# Free: 10 GB storage · 1M writes/mo · 10M reads/mo · zero egress
-STORAGE_ENDPOINT_URL=https://<ACCOUNT_ID>.r2.cloudflarestorage.com
-AWS_ACCESS_KEY_ID=your-r2-access-key-id
-AWS_SECRET_ACCESS_KEY=your-r2-secret-access-key
-AWS_REGION=auto
-AWS_S3_BUCKET_NAME=smarthire-ai
+# ── Vercel Blob File Storage ────────────────────────────────────
+# Get from: Vercel Dashboard → Storage → Blob → Connect
+BLOB_READ_WRITE_TOKEN=vercel_blob_rw_your_token_here
 
 # ── Google Gemini AI ───────────────────────────────────────────
 GEMINI_API_KEY=your-gemini-api-key      # 🔑 most important!
@@ -446,7 +442,7 @@ ALLOWED_ORIGINS=["http://localhost:3000","https://your-domain.vercel.app"]
 > openssl rand -hex 32
 > ```
 
-> 📁 **File Storage:** The project uses **Cloudflare R2** instead of AWS S3. Despite the `AWS_` prefixed variable names, boto3 routes all requests to R2 via `STORAGE_ENDPOINT_URL`. R2 offers **zero egress fees** vs AWS S3's ~$0.09/GB. See [`docs/deployment.md`](docs/deployment.md) for the full R2 setup walkthrough.
+> 📁 **File Storage:** The project uses **Vercel Blob** for PDF storage (resumes, ATS reports, cover letters). Files are served via Vercel's global CDN with a single `BLOB_READ_WRITE_TOKEN`. See [`docs/deployment.md`](docs/deployment.md) for the full setup walkthrough.
 
 ---
 
@@ -554,14 +550,12 @@ pytest -m "not integration"
 2. Copy connection string → `DATABASE_URL` in your env (use `postgresql+asyncpg://` scheme)
 3. Apply schema: `alembic upgrade head`
 
-### ☁️ File Storage → Cloudflare R2
+### ☁️ File Storage → Vercel Blob
 
-1. Sign in to [dash.cloudflare.com](https://dash.cloudflare.com) → **R2 Object Storage** → **Create bucket** (`smarthire-ai`)
-2. Go to **R2 → Manage R2 API Tokens** → create a token with **Object Read & Write** on your bucket
-3. Copy your **Account ID**, **Access Key ID**, and **Secret Access Key**
-4. Set env vars: `STORAGE_ENDPOINT_URL`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_S3_BUCKET_NAME`
-
-> See [`docs/deployment.md`](docs/deployment.md) for the complete step-by-step production deployment guide.
+1. Go to [vercel.com](https://vercel.com) → your project → **Storage** tab → **Create Blob Store**
+2. Click **Connect** on your blob store → copy the **`BLOB_READ_WRITE_TOKEN`**
+3. Set the env var: `BLOB_READ_WRITE_TOKEN=vercel_blob_rw_...` in your backend (Render) env vars
+4. Files are automatically served via Vercel's global CDN — no bucket policies or CORS config needed
 
 ### 🔑 Required GitHub Secrets
 
@@ -570,9 +564,7 @@ pytest -m "not integration"
 | `SECRET_KEY` | Backend JWT signing |
 | `DATABASE_URL` | Production PostgreSQL (Neon) |
 | `GEMINI_API_KEY` | All AI features |
-| `STORAGE_ENDPOINT_URL` | Cloudflare R2 endpoint |
-| `AWS_ACCESS_KEY_ID` | R2 access key (S3-compatible) |
-| `AWS_SECRET_ACCESS_KEY` | R2 secret key (S3-compatible) |
+| `BLOB_READ_WRITE_TOKEN` | Vercel Blob file storage |
 | `REDIS_URL` | Cache + task queue (Upstash) |
 | `RENDER_DEPLOY_HOOK_URL` | Backend auto-deploy |
 | `VERCEL_TOKEN` | Frontend deploy |

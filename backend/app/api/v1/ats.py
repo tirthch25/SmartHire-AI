@@ -314,7 +314,7 @@ async def export_ats_report(
 
     # If already exported, return fresh presigned URL
     if analysis.report_s3_key:
-        from app.core.s3_client import generate_presigned_url
+        from app.core.blob_client import generate_presigned_url
         try:
             url = generate_presigned_url(analysis.report_s3_key)
             return ExportUrlResponse(download_url=url, expires_in=3600)

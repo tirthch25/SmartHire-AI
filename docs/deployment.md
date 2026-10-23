@@ -7,7 +7,7 @@
 ## Prerequisites
 
 - GitHub repository pushed to `main` branch
-- Accounts on: [Vercel](https://vercel.com), [Render](https://render.com), [Neon](https://neon.tech), [Upstash](https://upstash.com), [AWS](https://aws.amazon.com) (for S3), [Google AI Studio](https://aistudio.google.com) (for Gemini)
+- Accounts on: [Vercel](https://vercel.com), [Render](https://render.com), [Neon](https://neon.tech), [Upstash](https://upstash.com), [Google AI Studio](https://aistudio.google.com) (for Gemini)
 
 ---
 
@@ -43,25 +43,17 @@
 
 ---
 
-## Step 3 — Cloudflare R2 (Free File Storage)
+## Step 3 — Vercel Blob (File Storage)
 
-> **Why R2?** Free tier: **10 GB storage**, **1M writes/month**, **10M reads/month**, and **zero egress fees** (AWS charges ~$0.09/GB for egress). Fully S3-compatible — no code changes needed.
+> **Why Vercel Blob?** No egress fees, automatic CDN distribution, and a single token for auth. Free tier includes generous storage.
 
-1. Go to [dash.cloudflare.com](https://dash.cloudflare.com) → create a free account if needed
-2. In the left sidebar → **R2 Object Storage** → **Create bucket**
-3. Bucket name: `smarthire-ai`, Location: **Automatic**
-4. Note your **Account ID** from the Cloudflare dashboard right sidebar
+1. Go to [vercel.com](https://vercel.com) → your project → **Storage** tab
+2. Click **Create Blob Store** → name it `smarthire-files`
+3. After creation, click **Connect** on your blob store
+4. Copy the **`BLOB_READ_WRITE_TOKEN`** (format: `vercel_blob_rw_...`)
+5. Save this token as `BLOB_READ_WRITE_TOKEN`
 
-### Create R2 API Token
-
-5. Go to **R2** → **Manage R2 API Tokens** → **Create API Token**
-6. Set permissions: **Object Read & Write** → scope to your `smarthire-ai` bucket
-7. Click **Create API Token** → copy and save:
-   - **Access Key ID** → save as `AWS_ACCESS_KEY_ID`
-   - **Secret Access Key** → save as `AWS_SECRET_ACCESS_KEY`
-8. Your endpoint URL: `https://<YOUR_ACCOUNT_ID>.r2.cloudflarestorage.com` → save as `STORAGE_ENDPOINT_URL`
-
-> **Note**: Despite the `AWS_` prefix, these are Cloudflare R2 credentials. boto3 uses these names internally but routes to R2 via the `STORAGE_ENDPOINT_URL`.
+> **Note**: You can also create a blob store from the Vercel CLI with `vercel storage create`.
 
 ---
 
@@ -98,15 +90,12 @@ After the services are created, go to each service → **Environment** and fill 
 | `CELERY_BROKER_URL` | Upstash URL + `/1` |
 | `CELERY_RESULT_BACKEND` | Upstash URL + `/2` |
 | `ALLOWED_ORIGINS` | `https://your-app.vercel.app` (update after Vercel deploy) |
-| `STORAGE_ENDPOINT_URL` | `https://<account_id>.r2.cloudflarestorage.com` (from Step 3) |
-| `AWS_ACCESS_KEY_ID` | R2 Access Key ID from Step 3 |
-| `AWS_SECRET_ACCESS_KEY` | R2 Secret Access Key from Step 3 |
-| `AWS_S3_BUCKET_NAME` | `smarthire-ai` |
+| `BLOB_READ_WRITE_TOKEN` | Vercel Blob token from Step 3 |
 | `GEMINI_API_KEY` | From Step 4 |
 
 #### For `smarthire-celery`:
 
-Copy the same secrets: `SECRET_KEY`, `DATABASE_URL`, `REDIS_URL`, `CELERY_BROKER_URL`, `CELERY_RESULT_BACKEND`, `STORAGE_ENDPOINT_URL`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_S3_BUCKET_NAME`, `GEMINI_API_KEY`
+Copy the same secrets: `SECRET_KEY`, `DATABASE_URL`, `REDIS_URL`, `CELERY_BROKER_URL`, `CELERY_RESULT_BACKEND`, `BLOB_READ_WRITE_TOKEN`, `GEMINI_API_KEY`
 
 ### 5.3 — Run Database Migrations
 
@@ -191,8 +180,7 @@ Add all of the following:
 | Secret Name | Description |
 |---|---|
 | `GEMINI_API_KEY` | For running integration tests in CI |
-| `AWS_ACCESS_KEY_ID` | For S3 mocks in CI |
-| `AWS_SECRET_ACCESS_KEY` | For S3 mocks in CI |
+| `BLOB_READ_WRITE_TOKEN` | For blob storage tests in CI |
 
 ---
 

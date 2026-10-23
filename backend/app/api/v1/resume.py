@@ -19,7 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.rate_limiter import RATE_LIMIT_UPLOAD, limiter
-from app.core.s3_client import build_resume_key, delete_file, generate_presigned_url, upload_bytes
+from app.core.blob_client import build_resume_key, delete_file, generate_presigned_url, upload_bytes
 from app.core.security import get_current_user_id
 from app.models.resume import Resume
 from app.schemas.resume import (

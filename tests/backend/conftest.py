@@ -3,41 +3,123 @@ SmartHire AI — pytest Configuration & Shared Fixtures
 
 Provides:
 - Async test setup (anyio / asyncio mode)
-- Test PostgreSQL database (uses a separate test DB)
+- In-memory SQLite test database (no credentials needed, fully offline)
 - Async SQLAlchemy session factory for tests
 - HTTP test client (httpx.AsyncClient)
 - Pre-built fixtures: test_user, auth_headers, sample_resume, sample_job
 """
 
 import asyncio
+import json
 import uuid
-from typing import AsyncGenerator
+from typing import Any, AsyncGenerator
 
 import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
+from sqlalchemy import String, Text, TypeDecorator, event
+from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.pool import StaticPool
 
-from app.core.config import settings
+from app.core.config import settings  # noqa: F401 — keeps config validated at import
 from app.core.database import Base, get_db
-from app.core.redis_client import init_redis, close_redis
-from app.core.security import hash_password, create_access_token
+import app.core.redis_client  # noqa: F401 — imported for fixture patching
+from app.core.security import create_access_token, hash_password
 from app.main import app
 from app.models.job import Job
 from app.models.resume import Resume
 from app.models.user import User
 
-# ── Test Database ─────────────────────────────────────────────────────────────
-TEST_DATABASE_URL = settings.DATABASE_URL.replace(
-    "/smarthire_db", "/smarthire_test"
-).replace("postgresql://", "postgresql+asyncpg://")
+# ── Override rate limiter to use in-memory storage ────────────────────────────
+# The production limiter uses `storage_uri=settings.REDIS_URL` (Upstash).
+# SlowAPIMiddleware reads `request.app.state.limiter` at request time, so
+# replacing it here ensures all unit-test requests hit an in-memory counter.
+from slowapi import Limiter as _Limiter
+from slowapi.util import get_remote_address as _get_remote_address
+import app.core.rate_limiter as _rate_limiter_module
 
-test_engine = create_async_engine(
-    TEST_DATABASE_URL,
-    echo=False,
-    pool_size=5,
-    pool_pre_ping=True,
+_test_limiter = _Limiter(
+    key_func=_get_remote_address,
+    storage_uri="memory://",
 )
+app.state.limiter = _test_limiter
+_rate_limiter_module.limiter.enabled = False
+
+
+# ── SQLite type shims — remap PG-specific types so SQLite can run them ─────────
+# SQLite does not understand PostgreSQL UUID or JSONB columns.
+# We override them globally on the Base.metadata so that when create_all() runs
+# against SQLite it emits VARCHAR / TEXT instead of the PG native types.
+
+class _UUIDString(TypeDecorator):
+    """Stores UUID as a 36-char VARCHAR string in SQLite."""
+    impl = String(36)
+    cache_ok = True
+
+    def process_bind_param(self, value: Any, dialect: Any) -> str | None:
+        if value is None:
+            return None
+        return str(value)
+
+    def process_result_value(self, value: Any, dialect: Any) -> uuid.UUID | None:
+        if value is None:
+            return None
+        return uuid.UUID(value)
+
+
+class _JSONBText(TypeDecorator):
+    """Stores JSONB as a plain TEXT (JSON-serialised) string in SQLite."""
+    impl = Text
+    cache_ok = True
+
+    def process_bind_param(self, value: Any, dialect: Any) -> str | None:
+        if value is None:
+            return None
+        return json.dumps(value)
+
+    def process_result_value(self, value: Any, dialect: Any) -> Any:
+        if value is None:
+            return None
+        return json.loads(value)
+
+
+def _patch_pg_types_for_sqlite() -> None:
+    """
+    Walk every mapped column in Base.metadata and replace PG-specific dialect
+    types (UUID, JSONB) with SQLite-compatible shims.  Called once before the
+    test engine creates tables.
+    """
+    for table in Base.metadata.tables.values():
+        for col in table.columns:
+            if isinstance(col.type, PG_UUID):
+                col.type = _UUIDString()
+                col.type._isnull = False
+            elif isinstance(col.type, JSONB):
+                col.type = _JSONBText()
+
+
+_patch_pg_types_for_sqlite()
+
+# ── In-memory SQLite test engine (aiosqlite, fully offline) ────────────────
+# StaticPool: every connection call returns the *same* underlying connection so
+# create_all() and subsequent test sessions all see the same in-memory DB.
+test_engine = create_async_engine(
+    "sqlite+aiosqlite:///:memory:",
+    echo=False,
+    connect_args={"check_same_thread": False},
+    poolclass=StaticPool,
+)
+
+
+@event.listens_for(test_engine.sync_engine, "connect")
+def _set_sqlite_pragma(dbapi_conn, _connection_record):
+    """Enable foreign-key enforcement in SQLite (off by default)."""
+    cursor = dbapi_conn.cursor()
+    cursor.execute("PRAGMA foreign_keys=ON")
+    cursor.close()
+
 
 TestSessionFactory = async_sessionmaker(
     bind=test_engine,
@@ -77,16 +159,23 @@ async def setup_database():
 
 @pytest_asyncio.fixture(scope="session", autouse=True)
 async def setup_redis():
-    """Initialize Redis for the test session."""
-    try:
-        await init_redis()
-    except Exception:
-        pass  # Redis may not be available in all CI environments
+    """
+    Inject a fakeredis client into the redis_client module so that all
+    auth endpoints (refresh-token storage, rate limits) work offline.
+    """
+    import fakeredis.aioredis as fake_aioredis
+    import app.core.redis_client as redis_module
+
+    fake_server = fake_aioredis.FakeServer()
+    fake_client = fake_aioredis.FakeRedis(
+        server=fake_server,
+        encoding="utf-8",
+        decode_responses=True,
+    )
+    redis_module._redis_client = fake_client
     yield
-    try:
-        await close_redis()
-    except Exception:
-        pass
+    await fake_client.aclose()
+    redis_module._redis_client = None
 
 
 # ── Function-scoped: DB Session ───────────────────────────────────────────────

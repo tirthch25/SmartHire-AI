@@ -18,7 +18,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.core.s3_client import generate_presigned_url
+from app.core.blob_client import generate_presigned_url
 from app.core.security import get_current_user_id
 from app.models.cover_letter import CoverLetter
 from app.models.job import Job
@@ -38,6 +38,9 @@ from app.workers.tasks import generate_cover_letter_task
 logger = structlog.get_logger(__name__)
 
 router = APIRouter()
+
+# Service reference (lazy loaded or patched in tests)
+pdf_export_service = None
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -333,7 +336,11 @@ async def export_cover_letter(
             company = job.company
 
     # Generate PDF synchronously (fast enough for direct response)
-    from app.services.pdf_export_service import pdf_export_service
+    global pdf_export_service
+    if pdf_export_service is None:
+        from app.services.pdf_export_service import pdf_export_service as _pes
+        pdf_export_service = _pes
+
     try:
         s3_key, download_url = pdf_export_service.export_cover_letter(
             content=letter.content,
