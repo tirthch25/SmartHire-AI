@@ -73,7 +73,7 @@ Run the deployment workflow manually or push the configured branch. It applies `
 - The frontend loads from the same domain and can register, log in, upload a resume, and poll the Celery task status.
 - Vercel Logs show the Celery daemon running and consuming tasks.
 
-The repository's current local environment still points at the existing Neon database. No database or file data has been copied to Supabase or Vercel Blob. Before switching production traffic, export and import the PostgreSQL data from Neon, migrate any stored files into the private Blob store, and update the API/worker `DATABASE_URL`. ChromaDB-only vectors are regenerated from resume/job text when first requested; the database records and file objects require their own migration.
+The former Neon source was checked and contained no application tables or records, so there was no user data to copy. The Supabase schema is initialized through Alembic migration `005_index_foreign_keys`. Keep the local `.env` on local PostgreSQL; set the production Supabase Session Pooler URL as `DATABASE_URL` in Vercel and GitHub Actions before deploying. Configure managed Redis and the private Vercel Blob store before enabling production traffic. ChromaDB-only vectors are regenerated from resume/job text when first requested.
 
 ## Troubleshooting
 

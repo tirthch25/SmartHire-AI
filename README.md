@@ -297,10 +297,11 @@ SmartHire-AI/
 │   └── backend/                  # 6 pytest test suites
 │
 ├── 📚 docs/                      # Architecture, API, DB Schema, Deployment, Setup Guide
-├── 🔧 .github/workflows/         # CI + backend + frontend deploy
+├── 🔧 .github/workflows/         # CI + database migration and Vercel deployment
 ├── 🐳 docker-compose.yml
 ├── 🐳 docker-compose.prod.yml
-├── .env.example                  # ← copy to .env and fill in
+├── frontend/.env.example         # safe Next.js client configuration template
+├── .env.example                  # safe backend/local development template
 └── pytest.ini
 ```
 
@@ -322,11 +323,13 @@ Before you begin, make sure you have:
 git clone https://github.com/tirthch25/SmartHire-AI.git
 cd SmartHire-AI
 
-# Copy the environment template
+# Copy the backend and frontend environment templates
 cp .env.example .env
+cp frontend/.env.example frontend/.env.local
 
-# Open .env and fill in your credentials
-# (at minimum: GEMINI_API_KEY, DATABASE_URL, REDIS_URL, and Blob token)
+# Add your local Gemini key and a generated SECRET_KEY to .env.
+# Set the Supabase URL and publishable key in frontend/.env.local.
+# Keep production credentials in Vercel/GitHub environment settings.
 ```
 
 ### 2️⃣ Launch All Services
@@ -402,46 +405,26 @@ npm run dev       # → http://localhost:3000
 
 ## 🔐 Environment Variables
 
-Copy `.env.example` → `.env` and fill in:
+Keep local settings in ignored env files and production secrets in the deployment provider. The committed example files contain placeholders and safe local defaults only.
 
-```env
-# ── App ────────────────────────────────────────────────────────
-APP_ENV=development
-SECRET_KEY=generate-with-openssl-rand-hex-32
-DEBUG=true
+| File | Purpose | Commit it? |
+|---|---|---|
+| `.env.example` | Backend and Docker local-development template | Yes |
+| `.env` | Local backend settings; use local PostgreSQL and Redis during development | No |
+| `frontend/.env.example` | Safe Next.js client configuration template | Yes |
+| `frontend/.env.local` | Supabase project URL, publishable key, and frontend settings | No |
+| `.env.local` | Local Vercel CLI values such as its short-lived OIDC token | No |
 
-# ── Database (Supabase Session Pooler) ─────────────────────────
-DATABASE_URL=postgresql+asyncpg://postgres.<project-ref>:<password>@aws-0-<region>.pooler.supabase.com:5432/postgres?ssl=require
-DB_POOL_SIZE=5
-DB_MAX_OVERFLOW=5
+Create local files from the templates:
 
-# ── Redis (Upstash recommended) ────────────────────────────────
-REDIS_URL=rediss://default:password@host:6379
-CELERY_BROKER_URL=rediss://default:password@host:6379/1
-CELERY_RESULT_BACKEND=rediss://default:password@host:6379/2
-
-# ── Vercel Blob File Storage ────────────────────────────────────
-# Get from: Vercel Dashboard → Storage → Blob → Connect
-BLOB_READ_WRITE_TOKEN=vercel_blob_rw_your_token_here
-
-# ── Google Gemini AI ───────────────────────────────────────────
-GEMINI_API_KEY=your-gemini-api-key      # 🔑 most important!
-GEMINI_MODEL=gemini-2.0-flash
-
-
-# ── CORS ───────────────────────────────────────────────────────
-# Use a JSON array for multiple origins
-ALLOWED_ORIGINS=["http://localhost:3000","https://your-domain.vercel.app"]
+```powershell
+Copy-Item .env.example .env
+Copy-Item frontend/.env.example frontend/.env.local
 ```
 
-> 💡 **Tip:** Generate a secure `SECRET_KEY` with:
-> ```bash
-> openssl rand -hex 32
-> ```
+The root `DATABASE_URL` should point to local PostgreSQL for local development. For deployment, set the Supabase Session Pooler URL in Vercel and as the GitHub Actions `DATABASE_URL` secret. Do not put production credentials in `.env.example` or copy the old Neon URL into deployment settings. Keep `REDIS_URL`, `CELERY_BROKER_URL`, `CELERY_RESULT_BACKEND`, `BLOB_READ_WRITE_TOKEN`, `GEMINI_API_KEY`, and `SECRET_KEY` server-side; never give secrets a `NEXT_PUBLIC_` prefix.
 
-> 📁 **File Storage:** The project uses a **private Vercel Blob store** for resumes and generated PDFs. Authenticated API routes stream files only after checking the user's JWT and ownership. See [`docs/deployment.md`](docs/deployment.md) for setup.
-
----
+`NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` are public client configuration values. They belong in `frontend/.env.local` for local development and in the Vercel project environment for Preview and Production. See [`docs/deployment.md`](docs/deployment.md) for production setup.
 
 ## 📡 API Reference
 
