@@ -83,7 +83,7 @@ Most resumes are **rejected by ATS bots before a human ever sees them**. SmartHi
 Google Gemini 2.0 Flash extracts structured entities — name, email, phone, skills, work experience, education — from any PDF resume automatically.
 
 ### 🎯 Semantic Job Matching
-Multi-dimensional matching using `SentenceTransformers` + `ChromaDB` embeddings for experience similarity, plus direct and fuzzy skills overlap scoring.
+Multi-dimensional matching using `SentenceTransformers` + Supabase `pgvector` embeddings for experience similarity, plus direct and fuzzy skills overlap scoring.
 
 </td>
 <td width="50%">
@@ -129,7 +129,7 @@ Track your ATS score trends over time, see component-level averages, monitor imp
 └──────────────────────────┬──────────────────────────────────────┘
                            │  REST API  ·  JWT Bearer Tokens
 ┌──────────────────────────▼──────────────────────────────────────┐
-│                   FastAPI Backend (Render)                       │
+│                   FastAPI Backend (Vercel)                       │
 │  ┌────────────────────────────────────────────────────────────┐ │
 │  │  /auth  /resume  /ats  /job  /interview  /cover-letter     │ │
 │  │                    /dashboard  /health                     │ │
@@ -145,8 +145,8 @@ Track your ATS score trends over time, see component-level averages, monitor imp
 └─────────────────────────────────────────────────────────────────┘
          │              │              │              │
     ┌────▼────┐   ┌─────▼────┐  ┌─────▼────┐  ┌─────▼────┐
-    │PostgreSQL│   │  Redis   │  │Cloudflare│  │ ChromaDB │
-    │  (Neon) │   │ Cache +  │  │   R2     │  │Embeddings│
+    │PostgreSQL│   │  Redis   │  │ Vercel  │  │pgvector  │
+    │(Supabase)│   │ Cache +  │  │  Blob   │  │ pgvector │
     │   ORM   │   │  Queue   │  │  Files  │  │  Vector  │
     └─────────┘   └──────────┘  └─────────┘  └──────────┘
 ```
@@ -158,7 +158,7 @@ Track your ATS score trends over time, see component-level averages, monitor imp
         │
         ▼
   FastAPI endpoint
-  ├─ Upload to Cloudflare R2
+  ├─ Upload to Vercel Blob
   └─ Create DB record (status: pending)
         │
         ▼
@@ -168,7 +168,7 @@ Track your ATS score trends over time, see component-level averages, monitor imp
   │  pdfplumber  ─────► text extraction│
   │  Gemini 2.0  ─────► entity parsing │
   │  MiniLM-L6   ─────► embedding gen  │
-  │  ChromaDB    ─────► vector storage │
+  │  Supabase pgvector ─► vector storage │
   └─────────────────────────────────────┘
         │
         ▼
@@ -226,7 +226,7 @@ Score Bands:
 ### AI / ML
 ![Google Gemini](https://img.shields.io/badge/Gemini_2.0_Flash-4285F4?style=for-the-badge&logo=google&logoColor=white)
 ![HuggingFace](https://img.shields.io/badge/SentenceTransformers-FFD21E?style=for-the-badge&logo=huggingface&logoColor=black)
-![ChromaDB](https://img.shields.io/badge/ChromaDB-Vector_DB-8B5CF6?style=for-the-badge)
+![pgvector](https://img.shields.io/badge/pgvector-Supabase-3FCF8E?style=for-the-badge&logo=supabase)
 
 ### Frontend
 ![Next.js](https://img.shields.io/badge/Next.js_16-000000?style=for-the-badge&logo=nextdotjs&logoColor=white)
@@ -238,8 +238,7 @@ Score Bands:
 ![Docker](https://img.shields.io/badge/Docker-2496ED?style=for-the-badge&logo=docker&logoColor=white)
 ![GitHub Actions](https://img.shields.io/badge/GitHub_Actions-2088FF?style=for-the-badge&logo=githubactions&logoColor=white)
 ![Vercel](https://img.shields.io/badge/Vercel-000000?style=for-the-badge&logo=vercel&logoColor=white)
-![Render](https://img.shields.io/badge/Render-46E3B7?style=for-the-badge&logo=render&logoColor=black)
-![Neon](https://img.shields.io/badge/Neon_DB-00E699?style=for-the-badge&logo=neon&logoColor=black)
+![Supabase](https://img.shields.io/badge/Supabase-PostgreSQL-3FCF8E?style=for-the-badge&logo=supabase&logoColor=white)
 
 </div>
 
@@ -259,7 +258,7 @@ SmartHire-AI/
 │   │   │   ├── job.py            # Create / Match / Skill-Gap
 │   │   │   ├── interview.py      # Generate questions
 │   │   │   └── cover_letter.py   # Generate / Export PDF
-│   │   ├── core/                 # Config, DB, Redis, S3, Security
+│   │   ├── core/                 # Config, DB, Redis, Blob, Security
 │   │   ├── models/               # SQLAlchemy ORM (6 models)
 │   │   ├── schemas/              # Pydantic schemas (6 modules)
 │   │   ├── services/             # 10 AI service modules
@@ -315,7 +314,7 @@ Before you begin, make sure you have:
 - 🐳 [Docker Desktop](https://www.docker.com/products/docker-desktop/)
 - 🔑 [Google Gemini API key](https://aistudio.google.com/app/apikey) (free tier works)
 - ▲ [Vercel account](https://vercel.com) with a Blob store created (free tier: 500 MB)
-- 🐘 PostgreSQL connection string ([Neon](https://neon.tech) free tier recommended)
+- 🐘 PostgreSQL connection string ([Supabase](https://supabase.com) project)
 
 ### 1️⃣ Clone & Configure
 
@@ -327,7 +326,7 @@ cd SmartHire-AI
 cp .env.example .env
 
 # Open .env and fill in your credentials
-# (at minimum: GEMINI_API_KEY, DATABASE_URL, STORAGE_ENDPOINT_URL, R2 keys)
+# (at minimum: GEMINI_API_KEY, DATABASE_URL, REDIS_URL, and Blob token)
 ```
 
 ### 2️⃣ Launch All Services
@@ -345,7 +344,6 @@ docker compose up --build
 | 🌸 Celery Flower | `5555` | http://localhost:5555 |
 | 🐘 PostgreSQL | `5432` | — |
 | ⚡ Redis | `6379` | — |
-| 🔮 ChromaDB | `8001` | — |
 
 ### 3️⃣ Run Database Migrations
 
@@ -358,7 +356,7 @@ docker compose exec api alembic upgrade head
 | Link | What's there |
 |---|---|
 | 🌐 http://localhost:3000 | The SmartHire AI app |
-| 📖 http://localhost:8000/docs | Swagger interactive API docs |
+| 📖 http://localhost:8000/api/docs | Swagger interactive API docs |
 | 🌸 http://localhost:5555 | Celery task monitor (Flower) |
 
 ---
@@ -412,8 +410,10 @@ APP_ENV=development
 SECRET_KEY=generate-with-openssl-rand-hex-32
 DEBUG=true
 
-# ── Database (Neon recommended) ────────────────────────────────
-DATABASE_URL=postgresql+asyncpg://user:pass@host/smarthire_db?sslmode=require
+# ── Database (Supabase Session Pooler) ─────────────────────────
+DATABASE_URL=postgresql+asyncpg://postgres.<project-ref>:<password>@aws-0-<region>.pooler.supabase.com:5432/postgres?ssl=require
+DB_POOL_SIZE=5
+DB_MAX_OVERFLOW=5
 
 # ── Redis (Upstash recommended) ────────────────────────────────
 REDIS_URL=rediss://default:password@host:6379
@@ -428,9 +428,6 @@ BLOB_READ_WRITE_TOKEN=vercel_blob_rw_your_token_here
 GEMINI_API_KEY=your-gemini-api-key      # 🔑 most important!
 GEMINI_MODEL=gemini-2.0-flash
 
-# ── ChromaDB ───────────────────────────────────────────────────
-CHROMA_HOST=localhost
-CHROMA_PORT=8001
 
 # ── CORS ───────────────────────────────────────────────────────
 # Use a JSON array for multiple origins
@@ -442,13 +439,13 @@ ALLOWED_ORIGINS=["http://localhost:3000","https://your-domain.vercel.app"]
 > openssl rand -hex 32
 > ```
 
-> 📁 **File Storage:** The project uses **Vercel Blob** for PDF storage (resumes, ATS reports, cover letters). Files are served via Vercel's global CDN with a single `BLOB_READ_WRITE_TOKEN`. See [`docs/deployment.md`](docs/deployment.md) for the full setup walkthrough.
+> 📁 **File Storage:** The project uses a **private Vercel Blob store** for resumes and generated PDFs. Authenticated API routes stream files only after checking the user's JWT and ownership. See [`docs/deployment.md`](docs/deployment.md) for setup.
 
 ---
 
 ## 📡 API Reference
 
-Full interactive docs at **`/docs`** (Swagger UI) · **`/redoc`** (ReDoc) when the server is running.
+Full interactive docs at **`/api/docs`** (Swagger UI) · **`/api/redoc`** (ReDoc) when the server is running.
 
 ### Endpoints at a Glance
 
@@ -463,7 +460,7 @@ Full interactive docs at **`/docs`** (Swagger UI) · **`/redoc`** (ReDoc) when t
 | `GET`  | `/api/v1/resume/list` | List all user resumes |
 | `GET`  | `/api/v1/resume/{id}` | Get resume metadata & parsed data |
 | `DELETE` | `/api/v1/resume/{id}` | Delete a resume |
-| `GET`  | `/api/v1/resume/{id}/download` | Presigned R2 URL to download PDF |
+| `GET`  | `/api/v1/resume/{id}/download` | Authenticated download route for private PDF |
 | `POST` | `/api/v1/ats/analyze` | Trigger ATS scoring (→ Celery) |
 | `GET`  | `/api/v1/ats/score/{resume_id}` | Fetch latest ATS score breakdown |
 | `GET`  | `/api/v1/ats/status/{task_id}` | Poll Celery task status |
@@ -528,49 +525,30 @@ pytest -m "not integration"
 
 ## ☁️ Deployment
 
-### 🔧 Backend → Render
+### Full stack → Vercel
 
-1. Create a new **Web Service** on [Render](https://render.com)
-2. Connect your GitHub repository — Render auto-detects `render.yaml`
-3. **Build Command:** `pip install -r backend/requirements.txt`
-4. **Start Command:** `uvicorn app.main:app --host 0.0.0.0 --port $PORT`
-5. Add all env vars from `.env.example` in the Render dashboard
-6. Set `RENDER_DEPLOY_HOOK_URL` in GitHub Secrets for auto-deploy on push
+Import the repository with its root as the project root. Enable the **Services** framework and confirm your Vercel team has access to Services and Daemons. The root `vercel.json` deploys the Next.js app, FastAPI API, and Celery daemon under one Vercel project. See [`docs/deployment.md`](docs/deployment.md) for the required environment variables and rollout steps.
 
-### 🌐 Frontend → Vercel
+### Database → Supabase
 
-1. Import your GitHub repo at [vercel.com/new](https://vercel.com/new)
-2. Set **Root Directory** → `frontend`
-3. Add env vars: `NEXT_PUBLIC_API_URL=https://your-render-app.onrender.com/api/v1`
-4. Set GitHub Secrets: `VERCEL_TOKEN`, `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID`
-
-### 🐘 Database → Neon
-
-1. Create a free project at [neon.tech](https://neon.tech)
-2. Copy connection string → `DATABASE_URL` in your env (use `postgresql+asyncpg://` scheme)
-3. Apply schema: `alembic upgrade head`
+Create a Supabase project, use its Session Pooler connection URL as `DATABASE_URL`, and run `alembic upgrade head`. Migration `002_pgvector_embeddings` stores semantic vectors in Supabase PostgreSQL.
 
 ### ☁️ File Storage → Vercel Blob
 
 1. Go to [vercel.com](https://vercel.com) → your project → **Storage** tab → **Create Blob Store**
-2. Click **Connect** on your blob store → copy the **`BLOB_READ_WRITE_TOKEN`**
-3. Set the env var: `BLOB_READ_WRITE_TOKEN=vercel_blob_rw_...` in your backend (Render) env vars
-4. Files are automatically served via Vercel's global CDN — no bucket policies or CORS config needed
+2. Connect the private store to the project. Vercel's Python SDK uses project OIDC credentials; configure `BLOB_READ_WRITE_TOKEN` for local or external environments.
+3. Authenticated API routes check the user's JWT and ownership before streaming each private file.
 
 ### 🔑 Required GitHub Secrets
 
 | Secret | Used by |
 |---|---|
 | `SECRET_KEY` | Backend JWT signing |
-| `DATABASE_URL` | Production PostgreSQL (Neon) |
-| `GEMINI_API_KEY` | All AI features |
-| `BLOB_READ_WRITE_TOKEN` | Vercel Blob file storage |
-| `REDIS_URL` | Cache + task queue (Upstash) |
-| `RENDER_DEPLOY_HOOK_URL` | Backend auto-deploy |
-| `VERCEL_TOKEN` | Frontend deploy |
-| `VERCEL_ORG_ID` | Frontend deploy |
-| `VERCEL_PROJECT_ID` | Frontend deploy |
-| `NEXT_PUBLIC_API_URL` | Frontend API target |
+| `DATABASE_URL` | Supabase PostgreSQL Session Pooler URL |
+| `GEMINI_API_KEY` | AI features (Vercel environment) |
+| `BLOB_READ_WRITE_TOKEN` | Vercel Blob (Vercel environment) |
+| `REDIS_URL`, `CELERY_BROKER_URL`, `CELERY_RESULT_BACKEND` | Managed Redis (Vercel environment) |
+| `VERCEL_TOKEN`, `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID` | Full project deployment workflow |
 
 ---
 

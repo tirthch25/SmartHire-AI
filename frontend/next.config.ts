@@ -9,19 +9,13 @@ const nextConfig: NextConfig = {
   // Only use standalone output for Docker; Vercel does not support it.
   ...(isVercel ? {} : { output: "standalone" }),
 
-  // Allow images from Vercel Blob CDN, Render-hosted backend, and localhost during development
+  // Allow images from Vercel Blob CDN and localhost during development
   images: {
     remotePatterns: [
       {
         // Vercel Blob CDN public URLs
         protocol: "https",
         hostname: "*.public.blob.vercel-storage.com",
-        pathname: "/**",
-      },
-      {
-        // Render backend (e.g. smarthire-api.onrender.com)
-        protocol: "https",
-        hostname: "*.onrender.com",
         pathname: "/**",
       },
       {

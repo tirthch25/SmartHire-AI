@@ -23,8 +23,8 @@ logger = structlog.get_logger(__name__)
 engine = create_async_engine(
     settings.async_database_url,
     echo=settings.DEBUG,          # Log SQL in debug mode
-    pool_size=10,
-    max_overflow=20,
+    pool_size=settings.DB_POOL_SIZE,
+    max_overflow=settings.DB_MAX_OVERFLOW,
     pool_pre_ping=True,            # Reconnect on stale connections
     pool_recycle=3600,             # Recycle connections every hour
     connect_args={"server_settings": {"jit": "off"}},  # Disable JIT for asyncpg compat

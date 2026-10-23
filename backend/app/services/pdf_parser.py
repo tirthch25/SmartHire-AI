@@ -4,7 +4,7 @@ SmartHire AI — PDF Parser Service
 Responsibilities:
 - Extract raw text from PDF bytes using pdfplumber
 - Detect structural elements (sections, bullet points, headers)
-- Upload raw PDF to AWS S3
+- Upload raw PDF to private Vercel Blob storage
 - Validate PDF size and MIME type
 """
 
@@ -185,7 +185,7 @@ class PDFParser:
         filename: str,
     ) -> str:
         """
-        Upload a PDF file to AWS S3.
+        Upload a PDF file to private Vercel Blob storage.
 
         Args:
             file_obj: File-like object (already validated).
@@ -197,7 +197,7 @@ class PDFParser:
         """
         s3_key = build_resume_key(user_id, filename)
         upload_file(file_obj, s3_key, content_type="application/pdf")
-        logger.info("Resume uploaded to S3", key=s3_key, user_id=user_id)
+        logger.info("Resume uploaded to private Blob storage", key=s3_key, user_id=user_id)
         return s3_key
 
 

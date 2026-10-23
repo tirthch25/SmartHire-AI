@@ -1,285 +1,159 @@
-"""
-SmartHire AI — Embedding Service (SentenceTransformers + ChromaDB)
+"""SentenceTransformer embeddings stored and searched in PostgreSQL pgvector."""
 
-Responsibilities:
-- Load and cache the SentenceTransformers model (all-MiniLM-L6-v2)
-- Encode text into 384-dimensional embedding vectors
-- Manage ChromaDB collections for resumes and jobs
-- Store, retrieve, and perform cosine similarity search
-"""
-
-import uuid
+from functools import lru_cache
 from typing import Optional
 
-import chromadb
 import structlog
+from sqlalchemy import create_engine, text
+from sqlalchemy.engine import Engine
 from sentence_transformers import SentenceTransformer
 
 from app.core.config import settings
 
 logger = structlog.get_logger(__name__)
+EMBEDDING_DIMENSIONS = 384
 
-# ChromaDB collection names
-RESUME_COLLECTION = "smarthire_resumes"
-JOB_COLLECTION = "smarthire_jobs"
+
+@lru_cache(maxsize=1)
+def _vector_engine() -> Engine:
+    """Share a small synchronous pool for vector operations in API and workers."""
+    return create_engine(
+        settings.sync_database_url,
+        pool_size=2,
+        max_overflow=3,
+        pool_pre_ping=True,
+        pool_recycle=1800,
+    )
 
 
 class EmbeddingService:
-    """
-    SentenceTransformers + ChromaDB vector store service.
-
-    The model is loaded lazily on first use to avoid slowing startup.
-    ChromaDB client connects to the standalone Docker service.
-
-    Usage:
-        svc = EmbeddingService()
-        embedding = svc.encode("Python developer with 5 years experience")
-        svc.add_resume(resume_id="uuid", text="...", metadata={...})
-        results = svc.search_similar_jobs(resume_id="uuid", n_results=5)
-    """
+    """Encode resume/job text and persist vectors in Supabase PostgreSQL."""
 
     def __init__(self):
         self._model: Optional[SentenceTransformer] = None
-        self._chroma_client: Optional[chromadb.HttpClient] = None
-        self._resume_collection = None
-        self._job_collection = None
 
     def _get_model(self) -> SentenceTransformer:
-        """Lazy-load the SentenceTransformer model (downloaded on first call)."""
         if self._model is None:
-            logger.info(
-                "Loading SentenceTransformer model",
-                model=settings.SENTENCE_TRANSFORMER_MODEL,
-            )
+            logger.info("Loading SentenceTransformer model", model=settings.SENTENCE_TRANSFORMER_MODEL)
             self._model = SentenceTransformer(settings.SENTENCE_TRANSFORMER_MODEL)
-            logger.info("SentenceTransformer model loaded")
         return self._model
 
-    def _get_chroma_client(self) -> chromadb.HttpClient:
-        """Lazy-connect to ChromaDB HTTP server."""
-        if self._chroma_client is None:
-            self._chroma_client = chromadb.HttpClient(
-                host=settings.CHROMA_HOST,
-                port=settings.CHROMA_PORT,
-            )
-            logger.info(
-                "ChromaDB client connected",
-                host=settings.CHROMA_HOST,
-                port=settings.CHROMA_PORT,
-            )
-        return self._chroma_client
-
-    def _get_resume_collection(self):
-        """Get or create the resumes ChromaDB collection."""
-        if self._resume_collection is None:
-            client = self._get_chroma_client()
-            self._resume_collection = client.get_or_create_collection(
-                name=RESUME_COLLECTION,
-                metadata={"hnsw:space": "cosine"},
-            )
-        return self._resume_collection
-
-    def _get_job_collection(self):
-        """Get or create the jobs ChromaDB collection."""
-        if self._job_collection is None:
-            client = self._get_chroma_client()
-            self._job_collection = client.get_or_create_collection(
-                name=JOB_COLLECTION,
-                metadata={"hnsw:space": "cosine"},
-            )
-        return self._job_collection
-
-    # ── Encoding ──────────────────────────────────────────────────────────────
-
-    def encode(self, text: str) -> list[float]:
-        """
-        Encode text into a 384-dimensional vector using SentenceTransformers.
-
-        Args:
-            text: Input text (resume or job description).
-
-        Returns:
-            List of 384 floats (normalized embedding vector).
-        """
-        model = self._get_model()
-        # Truncate to 512 tokens to avoid SBERT truncation warning
-        truncated = " ".join(text.split()[:400])
-        embedding = model.encode(truncated, normalize_embeddings=True)
-        return embedding.tolist()
+    def encode(self, text_value: str) -> list[float]:
+        truncated = " ".join(text_value.split()[:400])
+        return self._get_model().encode(truncated, normalize_embeddings=True).tolist()
 
     def encode_batch(self, texts: list[str]) -> list[list[float]]:
-        """Encode multiple texts in a single batch (more efficient)."""
-        model = self._get_model()
-        truncated = [" ".join(t.split()[:400]) for t in texts]
-        embeddings = model.encode(truncated, normalize_embeddings=True, batch_size=32)
-        return [e.tolist() for e in embeddings]
+        truncated = [" ".join(value.split()[:400]) for value in texts]
+        vectors = self._get_model().encode(truncated, normalize_embeddings=True, batch_size=32)
+        return [vector.tolist() for vector in vectors]
 
-    # ── Resume Collection ─────────────────────────────────────────────────────
+    @staticmethod
+    def _vector_literal(embedding: list[float]) -> str:
+        if len(embedding) != EMBEDDING_DIMENSIONS:
+            raise ValueError(f"Expected {EMBEDDING_DIMENSIONS} embedding values")
+        return "[" + ",".join(str(float(value)) for value in embedding) + "]"
 
-    def add_resume(
-        self,
-        resume_id: str,
-        text: str,
-        metadata: Optional[dict] = None,
-        embedding: Optional[list[float]] = None,
-    ) -> list[float]:
-        """
-        Add a resume to ChromaDB.
+    def _add(self, kind: str, item_id: str, text_value: str, metadata: Optional[dict], embedding: Optional[list[float]]) -> list[float]:
+        vector = embedding if embedding is not None else self.encode(text_value)
+        meta = dict(metadata or {})
+        owner = meta.get("user_id")
+        if not owner:
+            # Older jobs may predate user_id being included in vector metadata.
+            table = "jobs" if kind == "job" else "resumes"
+            with _vector_engine().connect() as connection:
+                owner = connection.execute(
+                    text(f"SELECT user_id::text FROM {table} WHERE id = CAST(:item_id AS uuid)"),
+                    {"item_id": item_id},
+                ).scalar_one_or_none()
+        with _vector_engine().begin() as connection:
+            connection.execute(
+                text("""
+                    INSERT INTO vector_embeddings (id, kind, user_id, embedding, metadata)
+                    VALUES (CAST(:item_id AS uuid), :kind, CAST(:user_id AS uuid),
+                            CAST(:embedding AS extensions.vector), CAST(:metadata AS jsonb))
+                    ON CONFLICT (id) DO UPDATE SET
+                        kind = EXCLUDED.kind,
+                        user_id = EXCLUDED.user_id,
+                        embedding = EXCLUDED.embedding,
+                        metadata = EXCLUDED.metadata,
+                        updated_at = now()
+                """),
+                {"item_id": item_id, "kind": kind, "user_id": owner,
+                 "embedding": self._vector_literal(vector),
+                 "metadata": __import__("json").dumps(meta)},
+            )
+        logger.info("Embedding stored in pgvector", kind=kind, item_id=item_id)
+        return vector
 
-        Args:
-            resume_id: UUID of the resume (used as ChromaDB document ID).
-            text: Full resume text.
-            metadata: Additional metadata (user_id, created_at, etc.)
-            embedding: Pre-computed embedding (if None, will encode text).
+    def add_resume(self, resume_id: str, text: str, metadata: Optional[dict] = None, embedding: Optional[list[float]] = None) -> list[float]:
+        return self._add("resume", resume_id, text, metadata, embedding)
 
-        Returns:
-            The embedding vector.
-        """
-        if embedding is None:
-            embedding = self.encode(text)
+    def add_job(self, job_id: str, text: str, metadata: Optional[dict] = None, embedding: Optional[list[float]] = None) -> list[float]:
+        return self._add("job", job_id, text, metadata, embedding)
 
-        collection = self._get_resume_collection()
-        meta = metadata or {}
-        meta["resume_id"] = resume_id
+    def _get(self, kind: str, item_id: str) -> Optional[list[float]]:
+        with _vector_engine().connect() as connection:
+            result = connection.execute(
+                text("SELECT embedding::text FROM vector_embeddings WHERE id = CAST(:item_id AS uuid) AND kind = :kind"),
+                {"item_id": item_id, "kind": kind},
+            ).scalar_one_or_none()
+        if result:
+            return [float(part) for part in result.strip("[]").split(",")]
 
-        collection.upsert(
-            ids=[resume_id],
-            embeddings=[embedding],
-            documents=[text[:1000]],  # Store truncated text for reference
-            metadatas=[meta],
-        )
-
-        logger.info("Resume added to ChromaDB", resume_id=resume_id)
-        return embedding
+        # Backfill vectors created before the ChromaDB-to-pgvector migration.
+        source_table, source_field = ("resumes", "raw_text") if kind == "resume" else ("jobs", "description")
+        with _vector_engine().connect() as connection:
+            row = connection.execute(
+                text(f"SELECT {source_field}, user_id::text FROM {source_table} WHERE id = CAST(:item_id AS uuid)"),
+                {"item_id": item_id},
+            ).first()
+        if not row or not row[0]:
+            return None
+        return self._add(kind, item_id, row[0], {"user_id": row[1]}, None)
 
     def delete_resume(self, resume_id: str) -> None:
-        """Remove a resume from ChromaDB."""
-        collection = self._get_resume_collection()
-        collection.delete(ids=[resume_id])
-        logger.info("Resume deleted from ChromaDB", resume_id=resume_id)
-
-    def get_resume_embedding(self, resume_id: str) -> Optional[list[float]]:
-        """Retrieve stored embedding for a resume."""
-        collection = self._get_resume_collection()
-        result = collection.get(ids=[resume_id], include=["embeddings"])
-        if result["embeddings"]:
-            return result["embeddings"][0]
-        return None
-
-    # ── Job Collection ────────────────────────────────────────────────────────
-
-    def add_job(
-        self,
-        job_id: str,
-        text: str,
-        metadata: Optional[dict] = None,
-        embedding: Optional[list[float]] = None,
-    ) -> list[float]:
-        """
-        Add a job description to ChromaDB.
-
-        Args:
-            job_id: UUID of the job.
-            text: Full job description text.
-            metadata: Additional metadata.
-            embedding: Pre-computed embedding.
-
-        Returns:
-            The embedding vector.
-        """
-        if embedding is None:
-            embedding = self.encode(text)
-
-        collection = self._get_job_collection()
-        meta = metadata or {}
-        meta["job_id"] = job_id
-
-        collection.upsert(
-            ids=[job_id],
-            embeddings=[embedding],
-            documents=[text[:1000]],
-            metadatas=[meta],
-        )
-
-        logger.info("Job added to ChromaDB", job_id=job_id)
-        return embedding
+        self._delete(resume_id)
 
     def delete_job(self, job_id: str) -> None:
-        """Remove a job from ChromaDB."""
-        collection = self._get_job_collection()
-        collection.delete(ids=[job_id])
+        self._delete(job_id)
+
+    @staticmethod
+    def _delete(item_id: str) -> None:
+        with _vector_engine().begin() as connection:
+            connection.execute(text("DELETE FROM vector_embeddings WHERE id = CAST(:item_id AS uuid)"), {"item_id": item_id})
+
+    def get_resume_embedding(self, resume_id: str) -> Optional[list[float]]:
+        return self._get("resume", resume_id)
 
     def get_job_embedding(self, job_id: str) -> Optional[list[float]]:
-        """Retrieve stored embedding for a job."""
-        collection = self._get_job_collection()
-        result = collection.get(ids=[job_id], include=["embeddings"])
-        if result["embeddings"]:
-            return result["embeddings"][0]
-        return None
+        return self._get("job", job_id)
 
-    # ── Similarity Search ─────────────────────────────────────────────────────
-
-    def find_similar_jobs(
-        self,
-        resume_id: str,
-        n_results: int = 5,
-        user_id: Optional[str] = None,
-    ) -> list[dict]:
-        """
-        Find the most similar jobs for a given resume using cosine similarity.
-
-        Args:
-            resume_id: UUID of the resume.
-            n_results: Number of results to return.
-            user_id: Optional filter to only search within user's jobs.
-
-        Returns:
-            List of dicts with job_id, distance, and metadata.
-        """
-        resume_embedding = self.get_resume_embedding(resume_id)
-        if not resume_embedding:
-            logger.warning("No embedding found for resume", resume_id=resume_id)
+    def find_similar_jobs(self, resume_id: str, n_results: int = 5, user_id: Optional[str] = None) -> list[dict]:
+        embedding = self.get_resume_embedding(resume_id)
+        if embedding is None:
             return []
+        vector = self._vector_literal(embedding)
+        with _vector_engine().connect() as connection:
+            rows = connection.execute(text("""
+                SELECT id::text AS job_id, metadata,
+                       embedding <=> CAST(:embedding AS extensions.vector) AS cosine_distance
+                FROM vector_embeddings
+                WHERE kind = 'job' AND (CAST(:user_id AS uuid) IS NULL OR user_id = CAST(:user_id AS uuid))
+                ORDER BY embedding <=> CAST(:embedding AS extensions.vector)
+                LIMIT :limit
+            """), {"embedding": vector, "user_id": user_id, "limit": max(1, n_results)}).mappings().all()
+        return [{
+            "job_id": row["job_id"],
+            "cosine_distance": float(row["cosine_distance"]),
+            "similarity_score": round((1 - float(row["cosine_distance"])) * 100, 2),
+            "metadata": row["metadata"] or {},
+        } for row in rows]
 
-        collection = self._get_job_collection()
-        where = {"user_id": user_id} if user_id else None
-
-        results = collection.query(
-            query_embeddings=[resume_embedding],
-            n_results=min(n_results, collection.count() or 1),
-            where=where,
-            include=["distances", "metadatas"],
-        )
-
-        output = []
-        for i, job_id in enumerate(results["ids"][0]):
-            output.append({
-                "job_id": job_id,
-                "cosine_distance": results["distances"][0][i],
-                "similarity_score": round((1 - results["distances"][0][i]) * 100, 2),
-                "metadata": results["metadatas"][0][i],
-            })
-
-        return output
-
-    def compute_similarity(
-        self,
-        embedding_a: list[float],
-        embedding_b: list[float],
-    ) -> float:
-        """
-        Compute cosine similarity between two embeddings.
-
-        Returns:
-            Similarity score between 0 and 1.
-        """
+    @staticmethod
+    def compute_similarity(embedding_a: list[float], embedding_b: list[float]) -> float:
         import numpy as np
         from sklearn.metrics.pairwise import cosine_similarity
-
-        a = np.array(embedding_a).reshape(1, -1)
-        b = np.array(embedding_b).reshape(1, -1)
-        return float(cosine_similarity(a, b)[0][0])
+        return float(cosine_similarity(np.array(embedding_a).reshape(1, -1), np.array(embedding_b).reshape(1, -1))[0][0])
 
 
-# Module-level singleton
 embedding_service = EmbeddingService()

@@ -8,7 +8,7 @@
  * - Throws ApiError with structured error info on non-2xx
  */
 
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000/api/v1";
+const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "/api/v1";
 
 export class ApiError extends Error {
   constructor(
@@ -105,6 +105,41 @@ async function request<T>(
   return json as T;
 }
 
+async function download(path: string, retry = true): Promise<void> {
+  const token = getAccessToken();
+  const res = await fetch(`${BASE_URL}${path}`, {
+    method: "GET",
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+
+  if (res.status === 401 && retry) {
+    const newToken = await refreshAccessToken();
+    if (newToken) return download(path, false);
+    clearTokens();
+    window.location.href = "/login";
+    throw new ApiError(401, "Session expired. Please log in again.");
+  }
+
+  if (!res.ok) {
+    const json = await res.json().catch(() => ({}));
+    throw new ApiError(res.status, json.detail ?? `HTTP ${res.status}`, json.errors);
+  }
+
+  const blob = await res.blob();
+  const disposition = res.headers.get("Content-Disposition") ?? "";
+  const utf8Name = disposition.match(/filename\*=UTF-8''([^;]+)/i)?.[1];
+  const plainName = disposition.match(/filename="?([^";]+)"?/i)?.[1];
+  const filename = utf8Name ? decodeURIComponent(utf8Name) : (plainName ?? "download.pdf");
+  const objectUrl = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = objectUrl;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+}
+
 // ── Typed API methods ──────────────────────────────────────────────────────────
 
 export const api = {
@@ -126,6 +161,8 @@ export const api = {
 
   upload: <T>(path: string, formData: FormData) =>
     request<T>(path, { method: "POST", body: formData }),
+
+  download,
 };
 
 export { setTokens, clearTokens, getAccessToken };

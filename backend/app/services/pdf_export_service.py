@@ -5,7 +5,7 @@ Generates professional PDF reports for:
 1. ATS Score Reports — includes score breakdown, charts, recommendations
 2. Cover Letter PDFs — clean formatted letter
 
-Uploads generated PDFs to AWS S3 and returns presigned download URLs.
+Uploads generated PDFs to private Vercel Blob storage for authenticated API downloads.
 """
 
 import io
@@ -71,7 +71,7 @@ class PDFExportService:
         user_id: str,
     ) -> tuple[str, str]:
         """
-        Generate an ATS score report PDF and upload to S3.
+        Generate an ATS score report PDF and upload to private Blob storage.
 
         Args:
             analysis_data: Full ATS analysis dict (from DB).
@@ -99,7 +99,7 @@ class PDFExportService:
         company: Optional[str] = None,
     ) -> tuple[str, str]:
         """
-        Generate a cover letter PDF and upload to S3.
+        Generate a cover letter PDF and upload to private Blob storage.
 
         Args:
             content: Plain text cover letter.

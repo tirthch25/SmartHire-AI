@@ -6,20 +6,20 @@ Endpoints:
     GET    /resume/list                Paginated list of user's resumes
     GET    /resume/{resume_id}         Full resume with parsed data
     DELETE /resume/{resume_id}         Delete resume + S3 object
-    GET    /resume/{resume_id}/download Presigned S3 download URL
+    GET    /resume/{resume_id}/download Authenticated private file download
 """
 
 import uuid
 from typing import Optional
 
 import structlog
-from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
+from fastapi import APIRouter, Depends, File, HTTPException, Request, Response, UploadFile, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.rate_limiter import RATE_LIMIT_UPLOAD, limiter
-from app.core.blob_client import build_resume_key, delete_file, generate_presigned_url, upload_bytes
+from app.core.blob_client import build_resume_key, delete_file, download_bytes, upload_bytes
 from app.core.security import get_current_user_id
 from app.models.resume import Resume
 from app.schemas.resume import (
@@ -77,7 +77,7 @@ async def upload_resume(
     Upload a PDF resume file.
 
     - Validates MIME type (must be application/pdf) and file size (max 10 MB)
-    - Uploads the PDF to AWS S3
+    - Uploads the PDF to private Vercel Blob storage
     - Creates a resume record in the database (status: pending)
     - Dispatches a Celery task to process the resume asynchronously
     - Returns a task_id for status polling via GET /ats/status/{task_id}
@@ -223,23 +223,23 @@ async def delete_resume(
     db: AsyncSession = Depends(get_db),
 ) -> None:
     """
-    Delete a resume and its associated S3 file.
-    Also removes the resume embedding from ChromaDB.
+    Delete a resume and its associated private Blob file.
+    Also removes the resume embedding from pgvector.
     """
     resume = await _get_resume_or_404(db, str(resume_id), user_id)
 
-    # Delete from S3 (non-blocking — don't fail if S3 delete fails)
+    # Delete from Blob storage without preventing the database deletion on failure.
     try:
         delete_file(resume.s3_key)
     except Exception as e:
-        logger.warning("S3 delete failed during resume deletion", key=resume.s3_key, error=str(e))
+        logger.warning("Blob deletion failed during resume deletion", key=resume.s3_key, error=str(e))
 
-    # Delete embedding from ChromaDB
+    # Delete embedding from pgvector
     try:
         from app.services.embedding_service import embedding_service
         embedding_service.delete_resume(str(resume_id))
     except Exception as e:
-        logger.warning("ChromaDB delete failed", resume_id=str(resume_id), error=str(e))
+        logger.warning("pgvector delete failed", resume_id=str(resume_id), error=str(e))
 
     await db.delete(resume)
     logger.info("Resume deleted", resume_id=str(resume_id), user_id=user_id)
@@ -248,25 +248,44 @@ async def delete_resume(
 @router.get(
     "/{resume_id}/download",
     response_model=DownloadUrlResponse,
-    summary="Get a presigned URL to download the original PDF",
+    summary="Get the authenticated download route for the original PDF",
 )
 async def download_resume(
     resume_id: uuid.UUID,
     user_id: str = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db),
 ) -> DownloadUrlResponse:
-    """Generate a temporary (1-hour) presigned URL for the original PDF file."""
+    """Return the authenticated API route for downloading the original PDF."""
     resume = await _get_resume_or_404(db, str(resume_id), user_id)
 
+    url = f"/resume/{resume.id}/file"
+    return DownloadUrlResponse(download_url=url, expires_in=0)
+
+
+@router.get("/{resume_id}/file", summary="Download the authenticated user's private resume PDF")
+async def download_resume_file(
+    resume_id: uuid.UUID,
+    user_id: str = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db),
+) -> Response:
+    resume = await _get_resume_or_404(db, str(resume_id), user_id)
     try:
-        url = generate_presigned_url(resume.s3_key)
+        data = download_bytes(resume.s3_key)
     except RuntimeError as e:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Could not generate download URL",
-        )
-
-    return DownloadUrlResponse(download_url=url, expires_in=3600)
+            detail="Could not download resume",
+        ) from e
+    from urllib.parse import quote
+    filename = quote(resume.filename or "resume.pdf")
+    return Response(
+        content=data,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f"attachment; filename*=UTF-8''{filename}",
+            "Cache-Control": "private, no-store",
+        },
+    )
 
 
 @router.get(

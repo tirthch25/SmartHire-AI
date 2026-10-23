@@ -46,14 +46,32 @@ class Settings(BaseSettings):
     DATABASE_URL: str = Field(
         default="postgresql+asyncpg://smarthire:smarthire@localhost:5432/smarthire_db"
     )
+    DB_POOL_SIZE: int = 5
+    DB_MAX_OVERFLOW: int = 5
 
     @property
     def async_database_url(self) -> str:
         """Ensure URL uses asyncpg driver."""
         url = self.DATABASE_URL
-        if url.startswith("postgresql://"):
+        if url.startswith("postgres://"):
+            url = url.replace("postgres://", "postgresql+asyncpg://", 1)
+        elif url.startswith("postgresql://"):
             url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
+        # Supabase publishes libpq-style sslmode=require URLs; asyncpg expects ssl=require.
+        url = url.replace("sslmode=require", "ssl=require")
         return url
+
+    @property
+    def sync_database_url(self) -> str:
+        """Return the PostgreSQL URL for synchronous SQLAlchemy/psycopg2 clients."""
+        url = self.DATABASE_URL
+        if url.startswith("postgres://"):
+            url = url.replace("postgres://", "postgresql+psycopg2://", 1)
+        elif url.startswith("postgresql+asyncpg://"):
+            url = url.replace("postgresql+asyncpg://", "postgresql+psycopg2://", 1)
+        elif url.startswith("postgresql://"):
+            url = url.replace("postgresql://", "postgresql+psycopg2://", 1)
+        return url.replace("ssl=require", "sslmode=require")
 
     # ── Redis ─────────────────────────────────────────────────
     REDIS_URL: str = "redis://localhost:6379/0"
@@ -83,10 +101,6 @@ class Settings(BaseSettings):
     GEMINI_API_KEY: str = ""
     GEMINI_MODEL: str = "gemini-2.0-flash"
     SENTENCE_TRANSFORMER_MODEL: str = "all-MiniLM-L6-v2"
-
-    # ── ChromaDB ─────────────────────────────────────────────
-    CHROMA_HOST: str = "localhost"
-    CHROMA_PORT: int = 8001
 
     # ── File Upload ───────────────────────────────────────────
     MAX_UPLOAD_SIZE_BYTES: int = 10 * 1024 * 1024  # 10 MB

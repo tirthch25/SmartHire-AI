@@ -6,14 +6,14 @@ Endpoints:
     GET    /ats/status/{task_id}       Poll Celery task status
     GET    /ats/score/{resume_id}      Latest completed ATS score for a resume
     GET    /ats/history                Paginated ATS analysis history
-    GET    /ats/export/{analysis_id}   Export ATS report as PDF (S3 presigned URL)
+    GET    /ats/export/{analysis_id}   Export ATS report as a private PDF download
 """
 
 import uuid
 from typing import Optional
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -306,20 +306,18 @@ async def export_ats_report(
     """
     Export an ATS analysis as a PDF report.
 
-    If the report was already exported, returns the existing presigned URL.
+    If the report was already exported, returns the authenticated download route.
     Otherwise, triggers a Celery export task and waits for completion,
     or returns a task_id for polling if the task takes longer than expected.
     """
     analysis = await _get_analysis_or_404(db, str(analysis_id), user_id)
 
-    # If already exported, return fresh presigned URL
+    # If already exported, return the authenticated download route.
     if analysis.report_s3_key:
-        from app.core.blob_client import generate_presigned_url
-        try:
-            url = generate_presigned_url(analysis.report_s3_key)
-            return ExportUrlResponse(download_url=url, expires_in=3600)
-        except Exception:
-            pass  # Fall through to re-generate
+        return ExportUrlResponse(
+            download_url=f"/ats/export/{analysis.id}/file",
+            expires_in=0,
+        )
 
     # Dispatch export task
     from app.workers.tasks import export_pdf_report_task
@@ -331,4 +329,29 @@ async def export_ats_report(
     return ExportUrlResponse(
         download_url=f"/ats/status/{task.id}",
         expires_in=0,
+    )
+
+
+@router.get("/export/{analysis_id}/file", summary="Download the authenticated user's private ATS report")
+async def download_ats_report(
+    analysis_id: uuid.UUID,
+    user_id: str = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db),
+) -> Response:
+    from app.core.blob_client import download_bytes
+
+    analysis = await _get_analysis_or_404(db, str(analysis_id), user_id)
+    if not analysis.report_s3_key:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Report not found")
+    try:
+        data = download_bytes(analysis.report_s3_key)
+    except RuntimeError as e:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Could not download report") from e
+    return Response(
+        content=data,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f'attachment; filename="ats-report-{analysis.id}.pdf"',
+            "Cache-Control": "private, no-store",
+        },
     )

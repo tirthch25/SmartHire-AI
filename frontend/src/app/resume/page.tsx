@@ -90,7 +90,7 @@ export default function ResumePage() {
 
   async function downloadResume(id: string) {
     const res = await api.get<{ download_url: string }>(`/resume/${id}/download`);
-    window.open(res.download_url, "_blank");
+    await api.download(res.download_url);
   }
 
   return (

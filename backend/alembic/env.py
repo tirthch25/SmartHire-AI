@@ -28,7 +28,7 @@ if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
 # Override sqlalchemy.url with the value from settings
-config.set_main_option("sqlalchemy.url", settings.async_database_url)
+config.set_main_option("sqlalchemy.url", settings.async_database_url.replace("%", "%%"))
 
 # Target metadata — SQLAlchemy knows all tables from imported models
 target_metadata = Base.metadata

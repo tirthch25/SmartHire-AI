@@ -35,8 +35,6 @@ services:
       - REDIS_URL=redis://redis:6379/0
       - CELERY_BROKER_URL=redis://redis:6379/1
       - CELERY_RESULT_BACKEND=redis://redis:6379/2
-      - CHROMA_HOST=chromadb
-      - CHROMA_PORT=8000
       # BLOB_READ_WRITE_TOKEN is loaded from .env via env_file above
     depends_on:
       postgres:
@@ -72,8 +70,6 @@ services:
       - REDIS_URL=redis://redis:6379/0
       - CELERY_BROKER_URL=redis://redis:6379/1
       - CELERY_RESULT_BACKEND=redis://redis:6379/2
-      - CHROMA_HOST=chromadb
-      - CHROMA_PORT=8000
       # BLOB_READ_WRITE_TOKEN is loaded from .env via env_file above
     depends_on:
       - redis
@@ -108,7 +104,7 @@ services:
 
   # ── PostgreSQL ────────────────────────────────────────────────────────────
   postgres:
-    image: postgres:16-alpine
+    image: pgvector/pgvector:pg16
     container_name: smarthire_postgres
     restart: unless-stopped
     ports:
@@ -141,23 +137,9 @@ services:
       timeout: 5s
       retries: 3
 
-  # ── ChromaDB ─────────────────────────────────────────────────────────────
-  chromadb:
-    image: chromadb/chroma:latest
-    container_name: smarthire_chroma
-    restart: unless-stopped
-    ports:
-      - "8001:8000"
-    volumes:
-      - chroma_data:/chroma/chroma
-    environment:
-      - IS_PERSISTENT=TRUE
-      - PERSIST_DIRECTORY=/chroma/chroma
-
 volumes:
   postgres_data:
   redis_data:
-  chroma_data:
 
 networks:
   default:

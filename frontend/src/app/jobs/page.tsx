@@ -103,10 +103,10 @@ function JobsContent() {
   async function exportPDF() {
     if (!atsResult) return;
     const res = await api.get<{ download_url: string }>(`/ats/export/${atsResult.id}`);
-    if (res.download_url.startsWith("/")) {
+    if (res.download_url.includes("/status/")) {
       setToast({ msg: "PDF export queued. Refresh in a moment.", type: "info" });
     } else {
-      window.open(res.download_url, "_blank");
+      await api.download(res.download_url);
     }
   }
 

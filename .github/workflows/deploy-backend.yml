@@ -1,15 +1,18 @@
-name: Deploy Backend
+name: Deploy SmartHire to Vercel
 
 on:
   push:
     branches: [main]
     paths:
       - "backend/**"
+      - "frontend/**"
+      - "vercel.json"
       - ".github/workflows/deploy-backend.yml"
+  workflow_dispatch:
 
 jobs:
-  deploy:
-    name: Deploy to Render
+  migrate-and-deploy:
+    name: Migrate Supabase and deploy Vercel services
     runs-on: ubuntu-latest
     environment: production
 
@@ -23,41 +26,37 @@ jobs:
           cache: "pip"
           cache-dependency-path: backend/requirements.txt
 
-      - name: Install backend dependencies (excluding heavy ML packages)
-        # We install the full requirements minus torch/transformers/chromadb which
-        # are not needed for running Alembic migrations. This ensures that
-        # app/core/config.py (pydantic-settings) and app/core/database.py load
-        # correctly when alembic/env.py is imported.
+      - name: Install migration dependencies
         run: |
-          pip install --upgrade pip
-          grep -v -E "^(torch|sentence-transformers|chromadb|transformers|scikit-learn|pytest|moto|fakeredis|factory-boy|ruff|mypy|flower)==" \
-            backend/requirements.txt > /tmp/alembic-requirements.txt
-          pip install -r /tmp/alembic-requirements.txt
+          python -m pip install --upgrade pip
+          python -m pip install sqlalchemy==2.0.36 asyncpg==0.30.0 alembic==1.14.0 \
+            pydantic==2.10.3 pydantic-settings==2.6.1 python-dotenv==1.0.1 structlog==24.4.0
 
-      - name: Run Alembic migrations
+      - name: Apply database migrations
+        working-directory: backend
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
-          SECRET_KEY: ${{ secrets.SECRET_KEY }}
+          # Settings validates this during Alembic startup; migrations do not use JWT signing.
+          SECRET_KEY: migration-only-placeholder-key-32-characters-minimum
           APP_ENV: production
-          # Dummy values for settings that are validated at startup but unused during migration
           REDIS_URL: redis://localhost:6379/0
           CELERY_BROKER_URL: redis://localhost:6379/1
           CELERY_RESULT_BACKEND: redis://localhost:6379/2
-          GEMINI_API_KEY: placeholder
-          BLOB_READ_WRITE_TOKEN: placeholder
-        working-directory: backend
+          GEMINI_API_KEY: migration-placeholder
+          BLOB_READ_WRITE_TOKEN: migration-placeholder
         run: alembic upgrade head
 
-      - name: Trigger Render deploy
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Deploy project to Vercel
         env:
-          RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
         run: |
-          if [ -n "$RENDER_DEPLOY_HOOK_URL" ]; then
-            curl -X POST "$RENDER_DEPLOY_HOOK_URL" \
-              -H "Content-Type: application/json" \
-              --fail --silent --show-error
-            echo "✅ Render deploy triggered successfully"
-          else
-            echo "⚠️ RENDER_DEPLOY_HOOK_URL not set — skipping auto-deploy trigger"
-            echo "   Set this secret in GitHub to enable automatic Render deploys."
-          fi
+          npm install --global vercel
+          vercel pull --yes --environment=production --token="$VERCEL_TOKEN"
+          vercel deploy --prod --yes --token="$VERCEL_TOKEN"

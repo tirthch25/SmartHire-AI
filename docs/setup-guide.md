@@ -5,8 +5,8 @@
 2. [Local Development (Docker Compose)](#2-local-development-docker-compose)
 3. [Manual Local Setup (Without Docker)](#3-manual-local-setup-without-docker)
 4. [Environment Variables Reference](#4-environment-variables-reference)
-5. [AWS S3 Setup](#5-aws-s3-setup)
-6. [Neon PostgreSQL Setup](#6-neon-postgresql-setup)
+5. [Vercel Blob Setup](#5-vercel-blob-setup)
+6. [Supabase PostgreSQL Setup](#6-supabase-postgresql-setup)
 7. [Redis Setup (Local + Cloud)](#7-redis-setup-local--cloud)
 8. [Production Deployment](#8-production-deployment)
 9. [Verifying the Setup](#9-verifying-the-setup)
@@ -44,7 +44,7 @@ cp .env.example .env
 Open `.env` and fill in the required values (see [Section 4](#4-environment-variables-reference)).  
 **Minimum required for local dev:**
 - `GEMINI_API_KEY` — get from [Google AI Studio](https://aistudio.google.com)
-- `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_S3_BUCKET_NAME` — see [Section 5](#5-aws-s3-setup)
+- `BLOB_READ_WRITE_TOKEN` — connect a private Vercel Blob store
 - `SECRET_KEY` — run `openssl rand -hex 32` to generate
 
 ### Step 3: Start All Services
@@ -55,21 +55,20 @@ docker compose up --build
 This starts:
 | Service | URL | Description |
 |---------|-----|-------------|
-| `backend` | http://localhost:8000 | FastAPI API server |
+| `api` | http://localhost:8000 | FastAPI API server |
 | `frontend` | http://localhost:3000 | Next.js dev server |
-| `chromadb` | http://localhost:8001 | ChromaDB vector DB |
 | `postgres` | localhost:5432 | PostgreSQL (local only) |
 | `redis` | localhost:6379 | Redis cache + broker |
-| `celery-worker` | — | Background task worker |
-| `celery-flower` | http://localhost:5555 | Celery monitoring UI |
+| `celery_worker` | — | Background task worker |
+| `flower` | http://localhost:5555 | Celery monitoring UI |
 
 ### Step 4: Run Database Migrations
 ```bash
-docker compose exec backend alembic upgrade head
+docker compose exec api alembic upgrade head
 ```
 
 ### Step 5: Verify
-- API docs: http://localhost:8000/docs
+- API docs: http://localhost:8000/api/docs
 - Frontend: http://localhost:3000
 - Flower UI: http://localhost:5555
 
@@ -136,7 +135,6 @@ npm run dev
 ### Local Services Required
 - PostgreSQL 16 running on `localhost:5432`
 - Redis 7 running on `localhost:6379`
-- ChromaDB running on `localhost:8001` (or use Docker: `docker run -p 8001:8000 chromadb/chroma`)
 
 ---
 
@@ -171,20 +169,14 @@ CELERY_BROKER_URL=redis://localhost:6379/1
 CELERY_RESULT_BACKEND=redis://localhost:6379/2
 CELERY_CONCURRENCY=4
 
-# ── AWS S3 ───────────────────────────────────────────────────
-AWS_ACCESS_KEY_ID=           # REQUIRED
-AWS_SECRET_ACCESS_KEY=       # REQUIRED
-AWS_REGION=us-east-1
-AWS_S3_BUCKET_NAME=          # REQUIRED: e.g. smarthire-ai-prod
+# ── Vercel Blob ───────────────────────────────────────────────
+BLOB_READ_WRITE_TOKEN=       # REQUIRED: private Vercel Blob store token
 
 # ── AI / ML ──────────────────────────────────────────────────
 GEMINI_API_KEY=              # REQUIRED: from Google AI Studio
 GEMINI_MODEL=gemini-2.0-flash
 SENTENCE_TRANSFORMER_MODEL=all-MiniLM-L6-v2
 
-# ── ChromaDB ─────────────────────────────────────────────────
-CHROMA_HOST=localhost
-CHROMA_PORT=8001
 
 # ── Rate Limiting ────────────────────────────────────────────
 RATE_LIMIT_DEFAULT=60/minute
@@ -204,83 +196,23 @@ NEXT_PUBLIC_APP_NAME="SmartHire AI"
 
 ---
 
-## 5. AWS S3 Setup
+## 5. Vercel Blob Setup
 
-### Step 1: Create an S3 Bucket
+1. In your Vercel project, open **Storage** and create a Blob store with access set to **Private**.
+2. Connect the store to the project and configure Vercel Blob credentials in the API and Celery daemon environments. The official Python SDK uses Vercel OIDC when the store is connected; `BLOB_READ_WRITE_TOKEN` also works for local development and non-Vercel environments.
+3. The API checks the user's JWT and ownership before streaming resumes and generated PDFs from private storage.
+## 6. Supabase PostgreSQL Setup
 
-1. Go to [AWS S3 Console](https://s3.console.aws.amazon.com)
-2. Click **Create bucket**
-3. Name: `smarthire-ai-prod` (must be globally unique)
-4. Region: `us-east-1` (or your preferred region)
-5. **Block all public access**: ✅ Enabled (files served via presigned URLs only)
-6. Versioning: Optional (recommended for production)
-7. Click **Create bucket**
-
-### Step 2: Create Folder Structure
-Create these prefixes (folders) in the bucket:
-- `resumes/`
-- `reports/`
-- `cover-letters/`
-
-### Step 3: Create IAM User + Policy
-
-1. Go to **IAM → Users → Create user**
-2. Name: `smarthire-ai-api`
-3. Attach policy:
-
-```json
-{
-  "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Sid": "SmartHireS3Access",
-      "Effect": "Allow",
-      "Action": [
-        "s3:PutObject",
-        "s3:GetObject",
-        "s3:DeleteObject",
-        "s3:GeneratePresignedUrl"
-      ],
-      "Resource": "arn:aws:s3:::smarthire-ai-prod/*"
-    }
-  ]
-}
-```
-
-4. Go to **Security credentials → Create access key**
-5. Copy `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` into your `.env`
-
-### Step 4: Configure CORS on the Bucket
-
-In S3 → Bucket → Permissions → CORS configuration:
-```json
-[
-  {
-    "AllowedHeaders": ["*"],
-    "AllowedMethods": ["GET", "PUT", "POST"],
-    "AllowedOrigins": ["https://your-frontend-domain.vercel.app"],
-    "ExposeHeaders": ["ETag"],
-    "MaxAgeSeconds": 3000
-  }
-]
-```
-
----
-
-## 6. Neon PostgreSQL Setup
-
-1. Go to [neon.tech](https://neon.tech) and create a free account
-2. Create a new **Project** named `smarthire-ai`
-3. Create a **Database** named `smarthire_db`
-4. In **Connection Details**, select the **Pooler** connection string for production
-5. Copy the connection string:
+1. Create a project at [supabase.com](https://supabase.com)
+2. In **Project Settings → Database → Connection string**, select **Session pooler** for the long-lived API and worker connections
+3. Copy the URI and adapt it for asyncpg:
    ```
-   postgresql+asyncpg://user:password@ep-xxx.us-east-1.aws.neon.tech/smarthire_db?sslmode=require
+   postgresql+asyncpg://postgres.<project-ref>:<password>@aws-0-<region>.pooler.supabase.com:5432/postgres?ssl=require
    ```
-6. Set `DATABASE_URL` in your environment
+4. URL-encode reserved characters in the password and set `DATABASE_URL` in the API, worker, and migration environments.
 
 > [!NOTE]
-> Neon's free tier provides 0.5 GB storage and auto-suspends after 5 minutes of inactivity — sufficient for development and small production workloads.
+> Use the Session Pooler URL (port 5432) for this SQLAlchemy/asyncpg application. Keep the database URL out of `NEXT_PUBLIC_*` frontend variables.
 
 ---
 
@@ -294,52 +226,15 @@ docker run -d -p 6379:6379 redis:7-alpine
 ### Production (Upstash — recommended free tier)
 1. Go to [upstash.com](https://upstash.com)
 2. Create a new Redis database
-3. Region: match your Render backend region
+3. Region: match your Vercel deployment region
 4. Copy the `REDIS_URL` (format: `redis://:password@host:port`)
-5. Set `REDIS_URL`, `CELERY_BROKER_URL`, `CELERY_RESULT_BACKEND` in Render env vars
+5. Set `REDIS_URL`, `CELERY_BROKER_URL`, `CELERY_RESULT_BACKEND` in Vercel environment variables
 
 ---
 
 ## 8. Production Deployment
 
-### Backend → Render
-
-1. Go to [render.com](https://render.com) → New → **Web Service**
-2. Connect your GitHub repository
-3. Settings:
-   - **Root Directory**: `backend`
-   - **Build Command**: `pip install -r requirements.txt`
-   - **Start Command**: `uvicorn app.main:app --host 0.0.0.0 --port $PORT`
-4. Add all environment variables from Section 4
-5. Create a second **Background Worker** service for Celery:
-   - **Root Directory**: `backend`
-   - **Start Command**: `celery -A app.workers.celery_app worker --loglevel=info`
-
-### Database Migrations (Render)
-Add a **Job** on Render that runs on each deploy:
-```bash
-alembic upgrade head
-```
-
-### Frontend → Vercel
-
-```bash
-# Install Vercel CLI
-npm install -g vercel
-
-# From project root
-cd frontend
-vercel --prod
-```
-
-Or connect via Vercel GitHub integration:
-1. Go to [vercel.com](https://vercel.com) → New Project
-2. Import your GitHub repository
-3. **Root Directory**: `frontend`
-4. Add environment variable: `NEXT_PUBLIC_API_URL=https://your-render-api.onrender.com/api/v1`
-
----
-
+See [deployment.md](deployment.md) for Vercel Services and Daemons, Supabase, environment variables, migrations, and deployment steps.
 ## 9. Verifying the Setup
 
 Run these checks after setup:
@@ -347,10 +242,10 @@ Run these checks after setup:
 ```bash
 # 1. Backend health check
 curl http://localhost:8000/health
-# Expected: {"status":"healthy","database":"connected","redis":"connected","chromadb":"connected"}
+# Expected: `status` is `healthy`; `services.database` and `services.redis` are `connected`.
 
 # 2. API docs accessible
-open http://localhost:8000/docs
+open http://localhost:8000/api/docs
 
 # 3. Register a test user
 curl -X POST http://localhost:8000/api/v1/auth/register \
@@ -370,24 +265,17 @@ cd frontend && npm run build
 
 ### `Error: connection refused` on DATABASE_URL
 - Ensure PostgreSQL is running: `docker compose ps`
-- For Neon: check `?sslmode=require` is in the URL
+- For Supabase: use the Session Pooler URL with `?ssl=require` and check the password is URL-encoded
 
 ### Celery tasks stuck in `PENDING`
 - Verify Redis is reachable: `redis-cli ping` → `PONG`
 - Check `CELERY_BROKER_URL` and `CELERY_RESULT_BACKEND` are set correctly
-- Check Celery worker logs: `docker compose logs celery-worker`
+- Check Celery worker logs: `docker compose logs celery_worker`
 
 ### `ModuleNotFoundError: sentence_transformers`
 - The first run downloads the `all-MiniLM-L6-v2` model (~90 MB). Ensure internet access.
 - Model is cached at `~/.cache/huggingface/` after first download.
 
-### S3 `Access Denied`
-- Verify IAM policy has `s3:PutObject` and `s3:GetObject` on the correct bucket ARN
-- Check `AWS_REGION` matches the bucket's region
-
-### ChromaDB connection issues
-- Ensure ChromaDB is running: `docker compose ps chromadb`
-- Default host: `localhost`, port: `8001`
 
 ### JWT `401 Unauthorized`
 - Access tokens expire in 15 minutes — use `POST /auth/refresh` to renew

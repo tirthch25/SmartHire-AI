@@ -76,7 +76,7 @@ export default function CoverLetterPage() {
   async function exportPDF() {
     if (!activeLetter) return;
     const res = await api.get<{ download_url: string }>(`/cover-letter/${activeLetter.id}/export`);
-    window.open(res.download_url, "_blank");
+    await api.download(res.download_url);
   }
 
   async function loadLetter(id: string) {

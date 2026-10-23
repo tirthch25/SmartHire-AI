@@ -68,19 +68,24 @@ async def _parse_job_in_background(job_id: str, description: str) -> None:
 
         parsed_data = resume_parser.extract_job_entities(description)
 
+        owner_id = None
         async with AsyncSessionFactory() as session:
             result = await session.execute(select(Job).where(Job.id == job_id))
             job = result.scalar_one_or_none()
             if job:
+                owner_id = str(job.user_id)
                 job.parsed_data = parsed_data
                 job.required_skills = parsed_data.get("required_skills", [])
                 await session.commit()
+
+        if not owner_id:
+            return
 
         # Also embed the job description for future similarity searches
         embedding_service.add_job(
             job_id=job_id,
             text=description,
-            metadata={"job_id": job_id},
+            metadata={"job_id": job_id, "user_id": owner_id},
         )
         logger.info("Background job parsing complete", job_id=job_id)
 
@@ -192,14 +197,14 @@ async def delete_job(
     user_id: str = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db),
 ) -> None:
-    """Delete a saved job description. Also removes its ChromaDB embedding."""
+    """Delete a saved job description. Also removes its pgvector embedding."""
     job = await _get_job_or_404(db, str(job_id), user_id)
 
     try:
         from app.services.embedding_service import embedding_service
         embedding_service.delete_job(str(job_id))
     except Exception as e:
-        logger.warning("ChromaDB delete failed for job", job_id=str(job_id), error=str(e))
+        logger.warning("pgvector delete failed for job", job_id=str(job_id), error=str(e))
 
     await db.delete(job)
     logger.info("Job deleted", job_id=str(job_id), user_id=user_id)

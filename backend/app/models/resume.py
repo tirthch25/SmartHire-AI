@@ -14,7 +14,7 @@ from app.core.database import Base
 
 class Resume(Base):
     __tablename__ = "resumes"
-    __table_args__ = {"comment": "Uploaded PDF resumes with S3 reference and parsed data"}
+    __table_args__ = {"comment": "Uploaded PDF resumes with private Blob reference and parsed data"}
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4

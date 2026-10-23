@@ -3,7 +3,7 @@ SmartHire AI — Celery Task Definitions
 
 Five async tasks that handle all AI-heavy, long-running operations:
 
-1. process_resume_upload   — PDF text extraction + Gemini parsing + ChromaDB embedding
+1. process_resume_upload   — PDF text extraction + Gemini parsing + Supabase pgvector embedding
 2. generate_ats_analysis   — Full 5-component ATS scoring
 3. generate_cover_letter_task  — Gemini cover letter generation
 4. generate_interview_questions_task — Gemini interview question generation
@@ -45,9 +45,7 @@ def _get_sync_session():
     from app.core.config import settings
 
     # Convert asyncpg URL to psycopg2 for sync usage
-    sync_url = settings.DATABASE_URL.replace(
-        "postgresql+asyncpg://", "postgresql://"
-    ).replace("?sslmode=require", "")
+    sync_url = settings.sync_database_url
 
     engine = create_engine(sync_url, pool_size=2, max_overflow=5, pool_pre_ping=True)
     SessionLocal = sessionmaker(bind=engine)
@@ -74,10 +72,10 @@ def _update_task_progress(task: Task, progress: int, message: str) -> None:
 def process_resume_upload(self: Task, resume_id: str) -> dict:
     """
     Full resume processing pipeline:
-    1. Download PDF from S3 (10%)
+    1. Download PDF from private Vercel Blob (10%)
     2. Extract text with pdfplumber (30%)
     3. Parse entities with Gemini (60%)
-    4. Generate embedding + store in ChromaDB (80%)
+    4. Generate embedding + store in Supabase pgvector (80%)
     5. Update resume record in DB as 'completed' (100%)
 
     Args:
@@ -102,10 +100,10 @@ def process_resume_upload(self: Task, resume_id: str) -> dict:
         resume.celery_task_id = self.request.id
         db.commit()
 
-        _update_task_progress(self, 10, "Downloading PDF from S3...")
+        _update_task_progress(self, 10, "Downloading PDF from private storage...")
         logger.info(f"Processing resume {resume_id}")
 
-        # Step 1: Download from S3
+        # Step 1: Download from private Blob storage
         pdf_bytes = download_bytes(resume.s3_key)
 
         _update_task_progress(self, 30, "Extracting text from PDF...")
@@ -121,7 +119,7 @@ def process_resume_upload(self: Task, resume_id: str) -> dict:
 
         _update_task_progress(self, 75, "Building semantic embeddings...")
 
-        # Step 4: Generate embedding and store in ChromaDB
+        # Step 4: Generate embedding and store in Supabase pgvector
         embedding = embedding_service.encode(raw_text)
         embedding_service.add_resume(
             resume_id=resume_id,
@@ -178,7 +176,7 @@ def generate_ats_analysis(self: Task, resume_id: str, job_id: str, user_id: str)
     """
     Full ATS scoring pipeline:
     1. Load resume + job from DB (10%)
-    2. Get embeddings from ChromaDB (25%)
+    2. Get embeddings from Supabase pgvector (25%)
     3. Run 5-component scoring engine (75%)
     4. Store analysis in DB (100%)
 
@@ -225,7 +223,7 @@ def generate_ats_analysis(self: Task, resume_id: str, job_id: str, user_id: str)
         resume_embedding = embedding_service.get_resume_embedding(resume_id)
         job_embedding = embedding_service.get_job_embedding(job_id)
 
-        # If job embedding not in ChromaDB, generate and store it
+        # If job embedding not in Supabase pgvector, generate and store it
         if not job_embedding:
             _update_task_progress(self, 40, "Generating job embeddings...")
             job_embedding = embedding_service.add_job(
@@ -476,7 +474,7 @@ def generate_interview_questions_task(
 )
 def export_pdf_report_task(self: Task, analysis_id: str, user_id: str) -> dict:
     """
-    Generate and upload an ATS score report PDF to S3.
+    Generate and upload an ATS score report PDF to private Blob storage.
 
     Args:
         analysis_id: ATSAnalysis UUID.
@@ -519,7 +517,7 @@ def export_pdf_report_task(self: Task, analysis_id: str, user_id: str) -> dict:
             user_id=user_id,
         )
 
-        _update_task_progress(self, 90, "Saving S3 reference...")
+        _update_task_progress(self, 90, "Saving private file reference...")
 
         analysis.report_s3_key = s3_key
         db.commit()

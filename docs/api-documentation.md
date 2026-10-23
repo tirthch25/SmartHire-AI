@@ -1,9 +1,10 @@
 # SmartHire AI — API Documentation
 
-**Base URL (Production):** `https://smarthire-api.onrender.com/api/v1`  
+**Base URL (Production):** `https://<your-vercel-domain>/api/v1`
 **Base URL (Local):** `http://localhost:8000/api/v1`  
-**OpenAPI Interactive Docs:** `{base_url}/docs` (Swagger UI)  
-**ReDoc:** `{base_url}/redoc`
+**OpenAPI Interactive Docs:** `https://<your-vercel-domain>/api/docs` (Swagger UI)
+**Local Swagger UI:** `http://localhost:8000/api/docs`
+**ReDoc:** `https://<your-vercel-domain>/api/redoc` or `http://localhost:8000/api/redoc`
 
 ---
 
@@ -252,7 +253,7 @@ List all resumes for the current user (paginated).
 
 #### `DELETE /resume/{resume_id}`
 🔒 **Auth Required**  
-Delete a resume and its S3 file.
+Delete a resume and its private Blob file.
 
 **Response `204`:** No content.
 
@@ -260,7 +261,7 @@ Delete a resume and its S3 file.
 
 #### `GET /resume/{resume_id}/download`
 🔒 **Auth Required**  
-Get a presigned S3 URL to download the original PDF (valid 1 hour).
+Get an authenticated API route to download the original PDF.
 
 **Response `200`:**
 ```json
@@ -430,7 +431,7 @@ Get semantic similarity score between a resume and job description.
   "education_match": true,
   "matched_skills": ["Python", "FastAPI", "PostgreSQL"],
   "missing_skills": ["Kubernetes", "Terraform", "Go"],
-  "bonus_skills": ["Machine Learning", "ChromaDB"]
+  "bonus_skills": ["Machine Learning", "PostgreSQL"]
 }
 ```
 
@@ -615,7 +616,7 @@ List all cover letters for the current user.
 
 #### `GET /cover-letter/{letter_id}/export`
 🔒 **Auth Required**  
-Export cover letter as PDF (S3 presigned URL).
+Export cover letter as PDF (authenticated private download).
 
 **Response `200`:**
 ```json

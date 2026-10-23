@@ -2,7 +2,7 @@
 
 ## Overview
 
-SmartHire AI uses **PostgreSQL 16** as the primary relational database, hosted on **Neon**.  
+SmartHire AI uses **PostgreSQL** as the primary relational database, hosted on **Supabase**.
 UUIDs are used as primary keys throughout (via `gen_random_uuid()`).  
 JSONB columns store semi-structured AI output (parsed data, report details, questions).
 
@@ -50,8 +50,8 @@ CREATE TABLE resumes (
     created_at      TIMESTAMPTZ     NOT NULL DEFAULT NOW()
 );
 
-COMMENT ON TABLE  resumes               IS 'Uploaded PDF resumes with S3 reference';
-COMMENT ON COLUMN resumes.s3_key        IS 'S3 object key: resumes/{user_id}/{uuid}.pdf';
+COMMENT ON TABLE  resumes               IS 'Uploaded PDF resumes with private Blob reference';
+COMMENT ON COLUMN resumes.s3_key        IS 'Private Blob object reference: resumes/{user_id}/{uuid}.pdf';
 COMMENT ON COLUMN resumes.file_size     IS 'File size in bytes, max 10MB enforced by CHECK';
 COMMENT ON COLUMN resumes.parsed_data   IS 'Gemini-extracted structured entities (JSONB)';
 COMMENT ON COLUMN resumes.status        IS 'Celery processing status';
@@ -97,7 +97,7 @@ CREATE TABLE ats_analyses (
 COMMENT ON TABLE  ats_analyses                  IS 'ATS scoring results for resume-job pairs';
 COMMENT ON COLUMN ats_analyses.overall_score    IS 'Weighted: KW(30)+FMT(15)+SEC(15)+SKL(20)+EXP(20)';
 COMMENT ON COLUMN ats_analyses.detailed_report  IS 'Matched/missing keywords, issues, recommendations';
-COMMENT ON COLUMN ats_analyses.report_s3_key    IS 'S3 key of exported PDF report (nullable until exported)';
+COMMENT ON COLUMN ats_analyses.report_s3_key    IS 'Private Blob reference for exported PDF report (nullable until exported)';
 
 -- ============================================================
 -- TABLE: cover_letters
@@ -117,7 +117,7 @@ CREATE TABLE cover_letters (
 );
 
 COMMENT ON TABLE  cover_letters         IS 'AI-generated cover letters';
-COMMENT ON COLUMN cover_letters.s3_key  IS 'S3 key of exported PDF (nullable until exported)';
+COMMENT ON COLUMN cover_letters.s3_key  IS 'Private Blob reference for exported PDF (nullable until exported)';
 
 -- ============================================================
 -- TABLE: interview_sessions
@@ -295,16 +295,14 @@ CREATE TRIGGER trg_cover_letters_updated_at
 
 ---
 
-## ChromaDB Collections
+## pgvector Embeddings
 
-| Collection | Embedding Source | Metadata |
-|-----------|-----------------|---------|
-| `resumes` | `raw_text` (full resume) | `{user_id, resume_id, created_at}` |
-| `jobs` | `description` (full JD) | `{user_id, job_id, title, company}` |
+Vectors are stored in the Supabase `vector_embeddings` table, keyed by resume/job UUID and owner UUID. JSONB metadata stores the source type and feature metadata.
 
 - **Model**: `all-MiniLM-L6-v2` → 384-dimensional vectors
 - **Distance metric**: Cosine similarity
-- **Used for**: Skills Match score + Experience Relevance score in ATS engine
+- **Used for**: Semantic job matching and experience relevance in ATS scoring
+- **Index**: HNSW cosine index
 
 ---
 

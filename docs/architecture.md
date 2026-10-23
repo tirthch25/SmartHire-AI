@@ -19,12 +19,12 @@ SmartHire AI is a multi-tier web application with clearly separated concerns:
 | Tier | Technology | Deployment |
 |------|-----------|-----------|
 | **Frontend** | Next.js 14 (App Router) + TypeScript + TailwindCSS | Vercel |
-| **Backend API** | FastAPI (Python 3.11) | Render |
-| **Task Workers** | Celery 5.4 | Render (background worker) |
-| **Primary Database** | PostgreSQL 16 | Neon |
+| **Backend API** | FastAPI (Python 3.11) | Vercel |
+| **Task Workers** | Celery 5.4 | Vercel (background worker) |
+| **Primary Database** | PostgreSQL | Supabase |
 | **Cache + Broker** | Redis 7 | Redis Cloud / Upstash |
-| **Vector Database** | ChromaDB 0.5 | Render (separate service) |
-| **File Storage** | AWS S3 | AWS |
+| **Vector Database** | pgvector | Vercel (separate service) |
+| **File Storage** | Private Vercel Blob | Vercel |
 | **AI Models** | Gemini 2.0 Flash + SentenceTransformers (all-MiniLM-L6-v2) | API / Embedded |
 
 ---
@@ -41,22 +41,22 @@ graph TB
         Vercel["Vercel Edge Network"]
     end
 
-    subgraph API["API Layer (Render)"]
+    subgraph API["API Layer (Vercel)"]
         FastAPI["FastAPI Server\n:8000"]
         RateLimiter["SlowAPI Rate Limiter\n(Redis-backed)"]
         JWTMiddleware["JWT Auth Middleware"]
     end
 
-    subgraph Workers["Worker Layer (Render)"]
+    subgraph Workers["Worker Layer (Vercel)"]
         CeleryWorker["Celery Worker\n(async tasks)"]
         CeleryFlower["Flower Monitor\n:5555"]
     end
 
     subgraph DataLayer["Data Layer"]
-        Postgres["PostgreSQL\n(Neon)\nPrimary DB"]
+        Postgres["PostgreSQL\n(Supabase)\nPrimary DB"]
         Redis["Redis\nCache + Broker"]
-        ChromaDB["ChromaDB\nVector Store"]
-        S3["AWS S3\nFile Storage"]
+        Supabase pgvector["Supabase pgvector\nVector Store"]
+        S3["Private Vercel Blob\nFile Storage"]
     end
 
     subgraph AILayer["AI Layer"]
@@ -76,11 +76,11 @@ graph TB
     CeleryWorker --> Redis
     CeleryWorker --> Postgres
     CeleryWorker --> S3
-    CeleryWorker --> ChromaDB
+    CeleryWorker --> Supabase pgvector
     CeleryWorker --> Gemini
     CeleryWorker --> SentenceTransformers
 
-    FastAPI -.->|query vectors| ChromaDB
+    FastAPI -.->|query vectors| Supabase pgvector
     CeleryFlower -.->|monitor| CeleryWorker
 ```
 
@@ -93,12 +93,12 @@ sequenceDiagram
     participant U as User (Browser)
     participant N as Next.js Frontend
     participant F as FastAPI
-    participant S3 as AWS S3
+    participant S3 as Vercel Blob
     participant R as Redis
     participant C as Celery Worker
     participant G as Gemini API
     participant ST as SentenceTransformers
-    participant CH as ChromaDB
+    participant CH as Supabase pgvector
     participant DB as PostgreSQL
 
     U->>N: Select PDF file + job description
@@ -106,7 +106,7 @@ sequenceDiagram
     F->>F: Validate JWT token
     F->>F: Validate file (size ≤10MB, type=PDF)
     F->>S3: Upload raw PDF → /resumes/{user_id}/{uuid}.pdf
-    S3-->>F: s3_key returned
+    S3-->>F: blob pathname returned
     F->>DB: INSERT resume (status='pending', s3_key)
     F->>C: dispatch process_resume_upload.delay(resume_id)
     F-->>N: {resume_id, task_id, status:'pending'}
@@ -146,7 +146,7 @@ sequenceDiagram
         F->>R: SET cache:ats:{resume_id} TTL=300s
     end
     F-->>N: Full ATS score response
-    N->>U: Render score breakdown dashboard
+    N->>U: Vercel score breakdown dashboard
 ```
 
 ---
@@ -257,15 +257,15 @@ graph LR
     end
 
     subgraph Tasks["Celery Tasks (Redis Broker)"]
-        W1["process_resume_upload\n─────────────\n• Download PDF from S3\n• Extract text (pdfplumber)\n• Parse entities (Gemini)\n• Embed text (SentenceTransformers)\n• Store in ChromaDB\n• Update DB status"]
+        W1["process_resume_upload\n─────────────\n• Download PDF from private Blob\n• Extract text (pdfplumber)\n• Parse entities (Gemini)\n• Embed text (SentenceTransformers)\n• Store in Supabase pgvector\n• Update DB status"]
 
-        W2["generate_ats_analysis\n─────────────\n• Keyword Match (TF-IDF)\n• Formatting check\n• Section completeness\n• Skills similarity (ST)\n• Experience relevance (ChromaDB)\n• Store scores in DB"]
+        W2["generate_ats_analysis\n─────────────\n• Keyword Match (TF-IDF)\n• Formatting check\n• Section completeness\n• Skills similarity (ST)\n• Experience relevance (Supabase pgvector)\n• Store scores in DB"]
 
         W3["generate_cover_letter\n─────────────\n• Load resume + job data\n• Gemini generation\n• Store in DB"]
 
         W4["generate_interview_questions\n─────────────\n• Load resume + job data\n• Gemini multi-category gen\n• Store in DB"]
 
-        W5["export_pdf_report\n─────────────\n• Fetch ATS analysis\n• Build PDF (ReportLab)\n• Upload PDF to S3\n• Return presigned URL"]
+        W5["export_pdf_report\n─────────────\n• Fetch ATS analysis\n• Build PDF (ReportLab)\n• Upload PDF to private Blob\n• Return authenticated download route"]
     end
 
     subgraph Results["Result Backend (Redis)"]
@@ -304,13 +304,13 @@ graph LR
 - **Progress updates**: Task state updated with custom `UPDATE` state + percentage
 - **Concurrency**: 4 worker processes (configurable via `CELERY_CONCURRENCY`)
 
-### ChromaDB
+### Supabase pgvector
 - **Collection: `resumes`** — one embedding per resume document
 - **Collection: `jobs`** — one embedding per job description
 - **Purpose**: Semantic similarity search for Skills Match and Experience Relevance scoring
 - **Embedding model**: `all-MiniLM-L6-v2` (384-dim, runs locally in worker)
 
-### AWS S3 Bucket Layout
+### Vercel Blob File Layout
 ```
 smarthire-ai-bucket/
 ├── resumes/
@@ -360,7 +360,7 @@ graph TD
 - File validation: MIME type must be `application/pdf`, max 10 MB
 - All inputs validated by Pydantic v2 before hitting business logic
 - CORS restricted to `ALLOWED_ORIGINS` env var
-- S3 files accessed via presigned URLs (1-hour expiry), never public
+- Private Blob files are streamed through authenticated, ownership-checked API routes
 
 ---
 
@@ -368,7 +368,7 @@ graph TD
 
 ```mermaid
 graph TD
-    PDF["PDF File\n(uploaded by user)"] --> S3Up["Upload to AWS S3"]
+    PDF["PDF File\n(uploaded by user)"] --> S3Up["Upload to Vercel Blob"]
     S3Up --> CeleryQ["Celery Queue\n(Redis broker)"]
 
     CeleryQ --> Extract["Text Extraction\npdfplumber"]
@@ -376,14 +376,14 @@ graph TD
     GeminiParse --> ParsedData["Parsed Resume\n{name, email, phone,\nskills[], education[],\nexperience[], projects[],\ncertifications[]}"]
 
     ParsedData --> Embed["SentenceTransformers\nall-MiniLM-L6-v2\n→ 384-dim vector"]
-    Embed --> ChromaStore["ChromaDB\nresumes collection"]
+    Embed --> PgvectorStore["Supabase pgvector\nresumes collection"]
 
     subgraph ATSScore["ATS Scoring Engine"]
         KW["Keyword Match\n30%\n(TF-IDF overlap)"]
         FMT["Formatting\n15%\n(section detection)"]
         SEC["Section Completeness\n15%\n(required sections)"]
         SKL["Skills Match\n20%\n(cosine similarity)"]
-        EXP["Experience Relevance\n20%\n(ChromaDB vector search)"]
+        EXP["Experience Relevance\n20%\n(Supabase pgvector vector search)"]
         TOTAL["Weighted Score\n0-100"]
 
         KW --> TOTAL
@@ -394,7 +394,7 @@ graph TD
     end
 
     ParsedData --> ATSScore
-    ChromaStore -.->|vector search| EXP
+    PgvectorStore -.->|vector search| EXP
 
     TOTAL --> Report["Detailed Report\n(JSONB in PostgreSQL)"]
     Report --> PDFExport["PDF Report\n(ReportLab → S3)"]

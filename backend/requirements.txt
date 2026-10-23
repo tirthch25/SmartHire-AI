@@ -25,9 +25,8 @@ pydantic==2.10.3
 pydantic-settings==2.6.1
 python-dotenv==1.0.1
 
-# ── Vercel Blob Storage (replaces boto3/S3) ──────────────────
-# Uses httpx (already included above) for HTTP-based blob operations
-# No additional package needed — httpx handles all Blob API calls
+# ── Vercel Blob Storage ──────────────────────────────────────
+vercel-blob>=0.5.0,<1.0
 
 # ── PDF Processing ───────────────────────────────────────────
 pdfplumber==0.11.4
@@ -38,7 +37,6 @@ Pillow==11.0.0
 # ── AI / ML ──────────────────────────────────────────────────
 google-generativeai==0.8.3
 sentence-transformers==3.3.1
-chromadb==0.5.23
 torch==2.5.1
 transformers==4.44.2
 tokenizers==0.19.1

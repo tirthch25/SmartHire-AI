@@ -9,7 +9,7 @@ Computes an ATS (Applicant Tracking System) compatibility score from 5 component
     Formatting              15%     Structural heuristics
     Section Completeness    15%     Required section detection
     Skills Match            20%     Cosine similarity (SentenceTransformers)
-    Experience Relevance    20%     Semantic vector search (ChromaDB)
+    Experience Relevance    20%     Semantic vector search (pgvector)
     ─────────────────────────────────────────────────────────────────
     Overall Score           100%    Weighted sum (0–100)
 

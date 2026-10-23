@@ -69,3 +69,6 @@ chroma_data/
 # ── Test artifacts ────────────────────────────────────────────
 .pytest_cache/
 test-results/
+
+.vercel
+.env*

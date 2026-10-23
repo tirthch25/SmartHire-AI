@@ -7,18 +7,18 @@ Endpoints:
     GET    /cover-letter/list                  List user's cover letters
     GET    /cover-letter/{letter_id}           Get a cover letter
     PUT    /cover-letter/{letter_id}           Update/edit a cover letter
-    GET    /cover-letter/{letter_id}/export    Export as PDF (S3 presigned URL)
+    GET    /cover-letter/{letter_id}/export    Export as PDF for authenticated download
 """
 
 import uuid
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.core.blob_client import generate_presigned_url
+from app.core.blob_client import download_bytes
 from app.core.security import get_current_user_id
 from app.models.cover_letter import CoverLetter
 from app.models.job import Job
@@ -306,8 +306,8 @@ async def export_cover_letter(
     """
     Export a cover letter as a PDF file.
 
-    If already exported, returns a fresh presigned URL for the existing PDF.
-    Otherwise, generates a new PDF, uploads to S3, stores the key, and returns the URL.
+    If already exported, returns the authenticated download route.
+    Otherwise, generates a PDF, uploads it to private Blob storage, and stores its reference.
     """
     letter = await _get_letter_or_404(db, str(letter_id), user_id)
 
@@ -319,11 +319,10 @@ async def export_cover_letter(
 
     # Return existing export if available
     if letter.s3_key:
-        try:
-            url = generate_presigned_url(letter.s3_key)
-            return CoverLetterExportResponse(download_url=url, expires_in=3600)
-        except Exception:
-            pass  # S3 key may be stale — regenerate
+        return CoverLetterExportResponse(
+            download_url=f"/cover-letter/{letter.id}/file",
+            expires_in=0,
+        )
 
     # Fetch job info for PDF header
     job_title = None
@@ -353,7 +352,10 @@ async def export_cover_letter(
         await db.flush()
 
         logger.info("Cover letter PDF exported", letter_id=str(letter_id), s3_key=s3_key)
-        return CoverLetterExportResponse(download_url=download_url, expires_in=3600)
+        return CoverLetterExportResponse(
+            download_url=f"/cover-letter/{letter.id}/file",
+            expires_in=0,
+        )
 
     except Exception as e:
         logger.error("Cover letter PDF export failed", letter_id=str(letter_id), error=str(e))
@@ -361,3 +363,26 @@ async def export_cover_letter(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="PDF export failed. Please try again.",
         )
+
+
+@router.get("/{letter_id}/file", summary="Download the authenticated user's private cover letter PDF")
+async def download_cover_letter_file(
+    letter_id: uuid.UUID,
+    user_id: str = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db),
+) -> Response:
+    letter = await _get_letter_or_404(db, str(letter_id), user_id)
+    if not letter.s3_key:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Export not found")
+    try:
+        data = download_bytes(letter.s3_key)
+    except RuntimeError as e:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Could not download export") from e
+    return Response(
+        content=data,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f'attachment; filename="cover-letter-{letter.id}.pdf"',
+            "Cache-Control": "private, no-store",
+        },
+    )

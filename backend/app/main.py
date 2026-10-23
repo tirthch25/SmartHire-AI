@@ -77,9 +77,9 @@ app = FastAPI(
         "and cover letter generation."
     ),
     version="1.0.0",
-    docs_url="/docs",
-    redoc_url="/redoc",
-    openapi_url="/openapi.json",
+    docs_url="/api/docs",
+    redoc_url="/api/redoc",
+    openapi_url="/api/openapi.json",
     lifespan=lifespan,
 )
 
@@ -158,7 +158,8 @@ app.include_router(
 
 
 # ── Health Check ─────────────────────────────────────────────────────────────
-@app.get("/health", tags=["Health"], summary="Service health check")
+@app.get("/health", tags=["Health"], summary="Service health check", include_in_schema=False)
+@app.get("/api/health", tags=["Health"], summary="Service health check")
 async def health_check():
     """
     Returns the health status of all connected services.
@@ -188,5 +189,5 @@ async def root():
     return {
         "name": settings.APP_NAME,
         "version": "1.0.0",
-        "docs": "/docs",
+        "docs": "/api/docs",
     }
