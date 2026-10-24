@@ -7,11 +7,14 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 WORKDIR /app
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential libpq-dev curl \
+    libgomp1 \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
+# Install the pinned CPU-only PyTorch wheel first so requirements.txt cannot
+# pull CUDA/NVIDIA libraries into the Vercel container image.
 RUN pip install --no-cache-dir --upgrade pip \
+    && pip install --no-cache-dir --index-url https://download.pytorch.org/whl/cpu torch==2.5.1 \
     && pip install --no-cache-dir -r requirements.txt
 
 COPY . .
