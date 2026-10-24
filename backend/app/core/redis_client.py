@@ -36,7 +36,8 @@ async def init_redis() -> None:
             health_check_interval=30,
         )
         await _redis_client.ping()
-        logger.info("Redis connection established", url=settings.REDIS_URL)
+        # Redis URLs contain credentials; never put them in application logs.
+        logger.info("Redis connection established")
     except Exception as e:
         logger.error("Redis connection failed", error=str(e))
         raise
