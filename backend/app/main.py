@@ -92,6 +92,9 @@ app.add_middleware(SlowAPIMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.ALLOWED_ORIGINS,
+    # allow_origin_regex supports Vercel preview URLs (e.g. smarthire-ai-*.vercel.app).
+    # Set ALLOWED_ORIGIN_REGEX env var in production; leave empty string to disable.
+    allow_origin_regex=settings.ALLOWED_ORIGIN_REGEX or None,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type", "X-Request-ID"],

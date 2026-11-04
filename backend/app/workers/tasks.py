@@ -24,8 +24,8 @@ from typing import Optional
 import structlog
 from celery import Task
 from celery.utils.log import get_task_logger
-from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy import create_engine, select
+from sqlalchemy.orm import Session, sessionmaker
 
 from app.workers.celery_app import celery_app
 
@@ -33,23 +33,38 @@ logger = get_task_logger(__name__)
 structlog_logger = structlog.get_logger(__name__)
 
 
-# ── Synchronous DB session for Celery (not async) ────────────────────────────
+# ── Synchronous DB engine for Celery (module-level, reused across tasks) ─────
+# Creating a new engine per task would exhaust PostgreSQL's connection limit.
+# This engine is initialised once when the worker imports the module and its
+# connection pool is shared across all tasks in the same worker process.
+def _make_sync_engine():
+    from sqlalchemy import create_engine as _ce
+    from app.core.config import settings
+    return _ce(
+        settings.sync_database_url,
+        pool_size=2,
+        max_overflow=5,
+        pool_pre_ping=True,
+        pool_recycle=1800,
+    )
+
+
+# Lazily-initialised at first task execution so the engine is only created
+# when a real Celery worker imports this module (not during FastAPI startup).
+_sync_engine = None
+_SyncSessionLocal = None
+
+
 def _get_sync_session():
     """
-    Create a synchronous SQLAlchemy session for use in Celery tasks.
-    Celery workers do not run inside an async event loop.
+    Return a synchronous SQLAlchemy session for use in Celery tasks.
+    The underlying engine is created once per worker process and reused.
     """
-    from sqlalchemy import create_engine
-    from sqlalchemy.orm import sessionmaker
-
-    from app.core.config import settings
-
-    # Convert asyncpg URL to psycopg2 for sync usage
-    sync_url = settings.sync_database_url
-
-    engine = create_engine(sync_url, pool_size=2, max_overflow=5, pool_pre_ping=True)
-    SessionLocal = sessionmaker(bind=engine)
-    return SessionLocal()
+    global _sync_engine, _SyncSessionLocal
+    if _sync_engine is None:
+        _sync_engine = _make_sync_engine()
+        _SyncSessionLocal = sessionmaker(bind=_sync_engine)
+    return _SyncSessionLocal()
 
 
 def _update_task_progress(task: Task, progress: int, message: str) -> None:
@@ -138,7 +153,7 @@ def process_resume_upload(self: Task, resume_id: str) -> dict:
 
         _update_task_progress(self, 100, "Resume processing complete!")
 
-        logger.info(f"Resume {resume_id} processed successfully")
+        logger.info("Resume processed successfully", resume_id=resume_id)
         return {
             "resume_id": resume_id,
             "status": "completed",
@@ -147,7 +162,7 @@ def process_resume_upload(self: Task, resume_id: str) -> dict:
         }
 
     except Exception as exc:
-        logger.error(f"Resume processing failed: {resume_id}", exc_info=exc)
+        logger.error("Resume processing failed", resume_id=resume_id, exc_info=True)
         if db:
             try:
                 resume = db.execute(select(Resume).where(Resume.id == resume_id)).scalar_one_or_none()
@@ -276,7 +291,8 @@ def generate_ats_analysis(self: Task, resume_id: str, job_id: str, user_id: str)
         _update_task_progress(self, 100, "ATS analysis complete!")
 
         logger.info(
-            f"ATS analysis complete for resume {resume_id}",
+            "ATS analysis complete",
+            resume_id=resume_id,
             overall=result.overall_score,
             analysis_id=str(analysis.id),
         )
@@ -289,7 +305,7 @@ def generate_ats_analysis(self: Task, resume_id: str, job_id: str, user_id: str)
         }
 
     except Exception as exc:
-        logger.error(f"ATS analysis failed for resume {resume_id}", exc_info=exc)
+        logger.error("ATS analysis failed", resume_id=resume_id, exc_info=True)
         raise self.retry(exc=exc, countdown=2 ** self.request.retries * 10)
 
     finally:
@@ -342,8 +358,13 @@ def generate_cover_letter_task(
 
         _update_task_progress(self, 20, "Loading resume and job data...")
 
-        resume = db.execute(select(Resume).where(Resume.id == resume_id)).scalar_one()
-        job = db.execute(select(Job).where(Job.id == job_id)).scalar_one()
+        resume = db.execute(select(Resume).where(Resume.id == resume_id)).scalar_one_or_none()
+        job = db.execute(select(Job).where(Job.id == job_id)).scalar_one_or_none()
+
+        if resume is None:
+            raise ValueError(f"Resume {resume_id} not found (may have been deleted)")
+        if job is None:
+            raise ValueError(f"Job {job_id} not found (may have been deleted)")
 
         if not resume.parsed_data:
             raise ValueError(f"Resume {resume_id} must be processed before generating a cover letter")
@@ -368,11 +389,11 @@ def generate_cover_letter_task(
 
         _update_task_progress(self, 100, "Cover letter generated!")
 
-        logger.info(f"Cover letter generated: {letter_id}", words=len(content.split()))
+        logger.info("Cover letter generated", letter_id=letter_id, word_count=len(content.split()))
         return {"letter_id": letter_id, "word_count": len(content.split())}
 
     except Exception as exc:
-        logger.error(f"Cover letter generation failed: {letter_id}", exc_info=exc)
+        logger.error("Cover letter generation failed", letter_id=letter_id, exc_info=True)
         raise self.retry(exc=exc, countdown=2 ** self.request.retries * 8)
 
     finally:
@@ -423,8 +444,13 @@ def generate_interview_questions_task(
 
         _update_task_progress(self, 20, "Loading resume and job data...")
 
-        resume = db.execute(select(Resume).where(Resume.id == resume_id)).scalar_one()
-        job = db.execute(select(Job).where(Job.id == job_id)).scalar_one()
+        resume = db.execute(select(Resume).where(Resume.id == resume_id)).scalar_one_or_none()
+        job = db.execute(select(Job).where(Job.id == job_id)).scalar_one_or_none()
+
+        if resume is None:
+            raise ValueError(f"Resume {resume_id} not found (may have been deleted)")
+        if job is None:
+            raise ValueError(f"Job {job_id} not found (may have been deleted)")
 
         if not resume.parsed_data:
             raise ValueError(f"Resume {resume_id} must be processed first")

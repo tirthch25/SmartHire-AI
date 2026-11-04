@@ -4,9 +4,16 @@ SmartHire AI — Resume API Router
 Endpoints:
     POST   /resume/upload              Upload PDF → S3 → Celery task
     GET    /resume/list                Paginated list of user's resumes
+    GET    /resume/task/{task_id}/status Poll Celery processing status
     GET    /resume/{resume_id}         Full resume with parsed data
     DELETE /resume/{resume_id}         Delete resume + S3 object
     GET    /resume/{resume_id}/download Authenticated private file download
+    GET    /resume/{resume_id}/file    Stream the private resume PDF
+
+Route ordering note: all static/fixed-prefix paths (e.g. /list,
+/task/{task_id}/status) MUST be registered before wildcard /{resume_id}
+routes, otherwise FastAPI will greedily match the wildcard first and
+return 422 Unprocessable Entity for the static paths.
 """
 
 import uuid
@@ -59,6 +66,7 @@ async def _get_resume_or_404(
 
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
+# IMPORTANT: static/fixed paths must come before wildcard /{resume_id} routes.
 
 @router.post(
     "/upload",
@@ -80,7 +88,7 @@ async def upload_resume(
     - Uploads the PDF to private Vercel Blob storage
     - Creates a resume record in the database (status: pending)
     - Dispatches a Celery task to process the resume asynchronously
-    - Returns a task_id for status polling via GET /ats/status/{task_id}
+    - Returns a task_id for status polling via GET /resume/task/{task_id}/status
     """
     from app.core.config import settings
 
@@ -156,6 +164,8 @@ async def upload_resume(
     )
 
 
+# ── Static paths BEFORE /{resume_id} wildcard ─────────────────────────────────
+
 @router.get(
     "/list",
     response_model=PaginatedResumes,
@@ -196,6 +206,50 @@ async def list_resumes(
         page_size=page_size,
     )
 
+
+@router.get(
+    "/task/{task_id}/status",
+    response_model=TaskStatusResponse,
+    summary="Poll Celery task status for resume processing",
+)
+async def get_task_status(
+    task_id: str,
+    user_id: str = Depends(get_current_user_id),
+) -> TaskStatusResponse:
+    """Poll the status of an async resume processing task."""
+    task_result = celery_app.AsyncResult(task_id)
+    state = task_result.state
+    meta = task_result.info or {}
+
+    if state == "PENDING":
+        return TaskStatusResponse(task_id=task_id, state="PENDING", progress=0, message="Waiting to start...")
+    elif state == "PROGRESS":
+        return TaskStatusResponse(
+            task_id=task_id,
+            state="PROGRESS",
+            progress=meta.get("progress", 0),
+            message=meta.get("message", "Processing..."),
+        )
+    elif state == "SUCCESS":
+        return TaskStatusResponse(
+            task_id=task_id,
+            state="SUCCESS",
+            progress=100,
+            message="Complete",
+            result=meta if isinstance(meta, dict) else {},
+        )
+    elif state == "FAILURE":
+        return TaskStatusResponse(
+            task_id=task_id,
+            state="FAILURE",
+            progress=0,
+            message=str(meta) if meta else "Task failed",
+        )
+    else:
+        return TaskStatusResponse(task_id=task_id, state=state, progress=0, message=str(meta))
+
+
+# ── Wildcard /{resume_id} routes — must come LAST ─────────────────────────────
 
 @router.get(
     "/{resume_id}",
@@ -286,45 +340,3 @@ async def download_resume_file(
             "Cache-Control": "private, no-store",
         },
     )
-
-
-@router.get(
-    "/task/{task_id}/status",
-    response_model=TaskStatusResponse,
-    summary="Poll Celery task status for resume processing",
-)
-async def get_task_status(
-    task_id: str,
-    user_id: str = Depends(get_current_user_id),
-) -> TaskStatusResponse:
-    """Poll the status of an async resume processing task."""
-    task_result = celery_app.AsyncResult(task_id)
-    state = task_result.state
-    meta = task_result.info or {}
-
-    if state == "PENDING":
-        return TaskStatusResponse(task_id=task_id, state="PENDING", progress=0, message="Waiting to start...")
-    elif state == "PROGRESS":
-        return TaskStatusResponse(
-            task_id=task_id,
-            state="PROGRESS",
-            progress=meta.get("progress", 0),
-            message=meta.get("message", "Processing..."),
-        )
-    elif state == "SUCCESS":
-        return TaskStatusResponse(
-            task_id=task_id,
-            state="SUCCESS",
-            progress=100,
-            message="Complete",
-            result=meta if isinstance(meta, dict) else {},
-        )
-    elif state == "FAILURE":
-        return TaskStatusResponse(
-            task_id=task_id,
-            state="FAILURE",
-            progress=0,
-            message=str(meta) if meta else "Task failed",
-        )
-    else:
-        return TaskStatusResponse(task_id=task_id, state=state, progress=0, message=str(meta))

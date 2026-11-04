@@ -52,12 +52,10 @@ jobs:
           cache-dependency-path: backend/requirements.txt
 
       - name: Install dependencies
-        run: pip install -r requirements.txt
+        run: pip install -r requirements.txt -r requirements-dev.txt
 
       - name: Run Ruff linter
-        run: |
-          pip install ruff
-          ruff check app/ --select E,F,W,I --ignore E501
+        run: ruff check app/ --select E,F,W,I --ignore E501
 
       - name: Run tests
         env:

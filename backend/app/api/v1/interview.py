@@ -187,6 +187,8 @@ async def get_task_status(
     return TaskStatusResponse(task_id=task_id, state=state, progress=0)
 
 
+# ── /list MUST come before /{session_id} wildcard to avoid UUID-parse 422 ──────
+
 @router.get(
     "/list",
     response_model=PaginatedSessions,

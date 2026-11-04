@@ -3,7 +3,15 @@
   "services": {
     "frontend": {
       "root": "frontend/",
-      "framework": "nextjs"
+      "framework": "nextjs",
+      "buildCommand": "npm run build",
+      "installCommand": "npm ci",
+      "env": {
+        "NEXT_PUBLIC_API_URL": "@next_public_api_url",
+        "NEXT_PUBLIC_APP_NAME": "@next_public_app_name",
+        "NEXT_PUBLIC_SUPABASE_URL": "@next_public_supabase_url",
+        "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY": "@next_public_supabase_publishable_key"
+      }
     },
     "backend": {
       "root": "backend/",
@@ -32,5 +40,15 @@
   "rewrites": [
     { "source": "/api/(.*)", "destination": { "service": "backend" } },
     { "source": "/(.*)", "destination": { "service": "frontend" } }
+  ],
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        { "key": "X-Content-Type-Options", "value": "nosniff" },
+        { "key": "X-Frame-Options", "value": "DENY" },
+        { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" }
+      ]
+    }
   ]
 }

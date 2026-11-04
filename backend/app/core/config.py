@@ -106,6 +106,12 @@ class Settings(BaseSettings):
     MAX_UPLOAD_SIZE_BYTES: int = 10 * 1024 * 1024  # 10 MB
     ALLOWED_CONTENT_TYPES: List[str] = ["application/pdf"]
 
+    # ── CORS ──────────────────────────────────────────────────
+    # Regex pattern for allowed origins — supports Vercel preview URLs.
+    # Example: r"https://smarthire-ai.*\.vercel\.app"
+    # Leave empty ("") to disable regex matching (production: set to your preview pattern).
+    ALLOWED_ORIGIN_REGEX: str = ""
+
     # ── Rate Limiting ─────────────────────────────────────────
     RATE_LIMIT_DEFAULT: str = "60/minute"
     RATE_LIMIT_AUTH: str = "10/minute"
