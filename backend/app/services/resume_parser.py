@@ -14,7 +14,6 @@ Returns validated Pydantic schema objects.
 
 import json
 import re
-from typing import Optional
 
 import google.generativeai as genai
 import structlog

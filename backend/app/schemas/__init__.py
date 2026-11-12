@@ -2,14 +2,22 @@
 SmartHire AI — Pydantic Schemas Package
 """
 
-from app.schemas.analysis import ATSAnalysisCreate, ATSAnalysisResponse, ATSComponentDetail
+from app.schemas.analysis import (
+    ATSAnalysisCreate,
+    ATSAnalysisResponse,
+    ATSComponentDetail,
+)
 from app.schemas.cover_letter import (
     CoverLetterCreate,
     CoverLetterResponse,
     CoverLetterUpdate,
 )
-from app.schemas.interview import InterviewSessionCreate, InterviewSessionResponse, Question
-from app.schemas.job import JobCreate, JobResponse, JobMatchResponse, SkillGapResponse
+from app.schemas.interview import (
+    InterviewSessionCreate,
+    InterviewSessionResponse,
+    Question,
+)
+from app.schemas.job import JobCreate, JobMatchResponse, JobResponse, SkillGapResponse
 from app.schemas.resume import ResumeResponse, ResumeUploadResponse
 from app.schemas.user import (
     Token,

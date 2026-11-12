@@ -24,8 +24,8 @@ from typing import Optional
 import structlog
 from celery import Task
 from celery.utils.log import get_task_logger
-from sqlalchemy import create_engine, select
-from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy import select
+from sqlalchemy.orm import sessionmaker
 
 from app.workers.celery_app import celery_app
 
@@ -39,6 +39,7 @@ structlog_logger = structlog.get_logger(__name__)
 # connection pool is shared across all tasks in the same worker process.
 def _make_sync_engine():
     from sqlalchemy import create_engine as _ce
+
     from app.core.config import settings
     return _ce(
         settings.sync_database_url,
@@ -259,17 +260,6 @@ def generate_ats_analysis(self: Task, resume_id: str, job_id: str, user_id: str)
         )
 
         _update_task_progress(self, 85, "Saving analysis results...")
-
-        # Serialize components for JSONB storage
-        components_dict = {
-            k: {
-                "score": v.score,
-                "weight": v.weight,
-                "weighted": v.weighted,
-                "description": None,
-            }
-            for k, v in result.components.items()
-        }
 
         analysis = ATSAnalysis(
             id=uuid.uuid4(),

@@ -60,7 +60,9 @@ async def init_db() -> None:
         if settings.APP_ENV == "development":
             # Only auto-create tables in dev (Alembic manages production)
             async with engine.begin() as conn:
-                from app.models import Base as ModelsBase  # noqa: F401 — import triggers model registration
+                from app.models import (
+                    Base as ModelsBase,  # noqa: F401 — import triggers model registration
+                )
                 await conn.run_sync(ModelsBase.metadata.create_all)
             logger.info("Database tables verified/created (development mode)")
         else:

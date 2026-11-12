@@ -14,7 +14,6 @@ registered before wildcard /{job_id} routes to avoid 422 on UUID parsing.
 """
 
 import uuid
-from typing import Optional
 
 import structlog
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
@@ -65,9 +64,10 @@ async def _parse_job_in_background(job_id: str, description: str) -> None:
     """Parse job description with Gemini in background (called as BackgroundTask)."""
     try:
         import asyncio  # noqa: F401
+
         from app.core.database import AsyncSessionFactory
-        from app.services.resume_parser import resume_parser
         from app.services.embedding_service import embedding_service
+        from app.services.resume_parser import resume_parser
 
         parsed_data = resume_parser.extract_job_entities(description)
 

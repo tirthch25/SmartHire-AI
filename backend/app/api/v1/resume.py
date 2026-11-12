@@ -17,16 +17,29 @@ return 422 Unprocessable Entity for the static paths.
 """
 
 import uuid
-from typing import Optional
 
 import structlog
-from fastapi import APIRouter, Depends, File, HTTPException, Request, Response, UploadFile, status
+from fastapi import (
+    APIRouter,
+    Depends,
+    File,
+    HTTPException,
+    Request,
+    Response,
+    UploadFile,
+    status,
+)
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.blob_client import (
+    build_resume_key,
+    delete_file,
+    download_bytes,
+    upload_bytes,
+)
 from app.core.database import get_db
 from app.core.rate_limiter import RATE_LIMIT_UPLOAD, limiter
-from app.core.blob_client import build_resume_key, delete_file, download_bytes, upload_bytes
 from app.core.security import get_current_user_id
 from app.models.resume import Resume
 from app.schemas.resume import (
