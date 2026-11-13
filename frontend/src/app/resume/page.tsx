@@ -15,7 +15,7 @@ interface ResumeSummary {
 }
 interface PaginatedResumes { items: ResumeSummary[]; total: number; page: number; }
 interface UploadResponse { resume_id: string; task_id: string; status: string; }
-interface TaskStatus { task_id: string; state: string; progress: number; message: string; result?: any; }
+interface TaskStatus { task_id: string; state: string; progress: number; message: string; result?: unknown; }
 
 function StatusBadge({ status }: { status: string }) {
   const cls = status === "completed" ? "badge-success"

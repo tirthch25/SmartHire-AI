@@ -2,7 +2,10 @@ FROM python:3.11-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    PYTHONPATH=/app
+    PYTHONPATH=/app \
+    # Cache sentence-transformers model inside the image so cold starts are fast.
+    SENTENCE_TRANSFORMERS_HOME=/app/.model_cache \
+    HF_HOME=/app/.model_cache
 
 WORKDIR /app
 
@@ -11,11 +14,26 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
-# Install the pinned CPU-only PyTorch wheel first so requirements.txt cannot
-# pull CUDA/NVIDIA libraries into the Vercel container image.
+
+# Step 1: Install CPU-only PyTorch wheel first.
+# Using --index-url (not --extra-index-url) prevents pip from even seeing the
+# CUDA wheels on PyPI. torch is NOT listed in requirements.txt to avoid a
+# second resolution pass that would pull the CUDA build (~10 GB).
 RUN pip install --no-cache-dir --upgrade pip \
-    && pip install --no-cache-dir --index-url https://download.pytorch.org/whl/cpu torch==2.5.1 \
-    && pip install --no-cache-dir -r requirements.txt
+    && pip install --no-cache-dir \
+       --index-url https://download.pytorch.org/whl/cpu \
+       torch==2.5.1
+
+# Step 2: Install remaining production dependencies.
+# torch is already installed above; pip will find it in site-packages and skip it.
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Step 3: Pre-download the sentence-transformers model (~90 MB) into the image.
+# This eliminates the 20-60 s cold-start penalty and avoids runtime egress issues.
+RUN python -c "\
+from sentence_transformers import SentenceTransformer; \
+SentenceTransformer('all-MiniLM-L6-v2')" \
+    && echo "Model cached at $SENTENCE_TRANSFORMERS_HOME"
 
 COPY . .
 

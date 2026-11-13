@@ -4,14 +4,16 @@ SmartHire AI — Job Description API Router
 Endpoints:
     POST   /job/create       Save a job description + parse with Gemini
     GET    /job/list         Paginated list of user's jobs
-    GET    /job/{job_id}     Full job details
-    DELETE /job/{job_id}     Delete a job
     POST   /job/match        Semantic match score: resume vs job
     GET    /job/skill-gap    Detailed skill gap analysis
+    GET    /job/{job_id}     Full job details
+    DELETE /job/{job_id}     Delete a job
+
+Route ordering note: static paths (/list, /match, /skill-gap) MUST be
+registered before wildcard /{job_id} routes to avoid 422 on UUID parsing.
 """
 
 import uuid
-from typing import Optional
 
 import structlog
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
@@ -62,9 +64,10 @@ async def _parse_job_in_background(job_id: str, description: str) -> None:
     """Parse job description with Gemini in background (called as BackgroundTask)."""
     try:
         import asyncio  # noqa: F401
+
         from app.core.database import AsyncSessionFactory
-        from app.services.resume_parser import resume_parser
         from app.services.embedding_service import embedding_service
+        from app.services.resume_parser import resume_parser
 
         parsed_data = resume_parser.extract_job_entities(description)
 
@@ -94,6 +97,7 @@ async def _parse_job_in_background(job_id: str, description: str) -> None:
 
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
+# IMPORTANT: static/fixed paths BEFORE wildcard /{job_id} routes.
 
 @router.post(
     "/create",
@@ -170,44 +174,6 @@ async def list_jobs(
         page=page,
         page_size=page_size,
     )
-
-
-@router.get(
-    "/{job_id}",
-    response_model=JobResponse,
-    summary="Get a job description by ID",
-)
-async def get_job(
-    job_id: uuid.UUID,
-    user_id: str = Depends(get_current_user_id),
-    db: AsyncSession = Depends(get_db),
-) -> JobResponse:
-    """Retrieve a job description with parsed entities."""
-    job = await _get_job_or_404(db, str(job_id), user_id)
-    return JobResponse.model_validate(job)
-
-
-@router.delete(
-    "/{job_id}",
-    status_code=status.HTTP_204_NO_CONTENT,
-    summary="Delete a job description",
-)
-async def delete_job(
-    job_id: uuid.UUID,
-    user_id: str = Depends(get_current_user_id),
-    db: AsyncSession = Depends(get_db),
-) -> None:
-    """Delete a saved job description. Also removes its pgvector embedding."""
-    job = await _get_job_or_404(db, str(job_id), user_id)
-
-    try:
-        from app.services.embedding_service import embedding_service
-        embedding_service.delete_job(str(job_id))
-    except Exception as e:
-        logger.warning("pgvector delete failed for job", job_id=str(job_id), error=str(e))
-
-    await db.delete(job)
-    logger.info("Job deleted", job_id=str(job_id), user_id=user_id)
 
 
 @router.post(
@@ -321,3 +287,43 @@ async def get_skill_gap(
         gap_score=gap_result["gap_score"],
         recommendations=gap_result["recommendations"],
     )
+
+
+# ── Wildcard /{job_id} routes — must come LAST ────────────────────────────────
+
+@router.get(
+    "/{job_id}",
+    response_model=JobResponse,
+    summary="Get a job description by ID",
+)
+async def get_job(
+    job_id: uuid.UUID,
+    user_id: str = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db),
+) -> JobResponse:
+    """Retrieve a job description with parsed entities."""
+    job = await _get_job_or_404(db, str(job_id), user_id)
+    return JobResponse.model_validate(job)
+
+
+@router.delete(
+    "/{job_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Delete a job description",
+)
+async def delete_job(
+    job_id: uuid.UUID,
+    user_id: str = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db),
+) -> None:
+    """Delete a saved job description. Also removes its pgvector embedding."""
+    job = await _get_job_or_404(db, str(job_id), user_id)
+
+    try:
+        from app.services.embedding_service import embedding_service
+        embedding_service.delete_job(str(job_id))
+    except Exception as e:
+        logger.warning("pgvector delete failed for job", job_id=str(job_id), error=str(e))
+
+    await db.delete(job)
+    logger.info("Job deleted", job_id=str(job_id), user_id=user_id)

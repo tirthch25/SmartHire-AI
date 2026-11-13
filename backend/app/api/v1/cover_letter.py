@@ -17,8 +17,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.database import get_db
 from app.core.blob_client import download_bytes
+from app.core.database import get_db
 from app.core.security import get_current_user_id
 from app.models.cover_letter import CoverLetter
 from app.models.job import Job
@@ -240,13 +240,13 @@ async def list_cover_letters(
 
     items = [
         CoverLetterSummary(
-            id=l.id,
-            job_id=l.job_id,
-            tone=l.tone,
-            word_count=l.word_count,
-            created_at=l.created_at,
+            id=letter.id,
+            job_id=letter.job_id,
+            tone=letter.tone,
+            word_count=letter.word_count,
+            created_at=letter.created_at,
         )
-        for l in letters
+        for letter in letters
     ]
 
     return PaginatedCoverLetters(items=items, total=total, page=page, page_size=page_size)

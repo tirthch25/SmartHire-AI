@@ -21,7 +21,6 @@ from dataclasses import dataclass, field
 from typing import Optional
 
 import structlog
-from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 
 logger = structlog.get_logger(__name__)
