@@ -24,10 +24,14 @@ const DIFF_BG: Record<string, string> = {
   easy: "rgba(16,185,129,0.1)", medium: "rgba(245,158,11,0.1)", hard: "rgba(239,68,68,0.1)"
 };
 
+interface Resume { id: string; filename: string; status: string; }
+interface Job { id: string; title: string; }
+interface SessionSummary { id: string; question_count: number; created_at: string; }
+
 export default function InterviewPage() {
-  const [resumes, setResumes] = useState<any[]>([]);
-  const [jobs, setJobs] = useState<any[]>([]);
-  const [sessions, setSessions] = useState<any[]>([]);
+  const [resumes, setResumes] = useState<Resume[]>([]);
+  const [jobs, setJobs] = useState<Job[]>([]);
+  const [sessions, setSessions] = useState<SessionSummary[]>([]);
   const [activeSession, setActiveSession] = useState<Session | null>(null);
   const [filter, setFilter] = useState("All");
   const [expanded, setExpanded] = useState<Set<number>>(new Set());
@@ -40,9 +44,9 @@ export default function InterviewPage() {
   });
 
   useEffect(() => {
-    api.get<any>("/resume/list").then(d => setResumes((d.items ?? []).filter((r: any) => r.status === "completed")));
-    api.get<any>("/job/list").then(d => setJobs(d.items ?? []));
-    api.get<any>("/interview/list").then(d => setSessions(d.items ?? []));
+    api.get<{ items: Resume[] }>("/resume/list").then(d => setResumes((d.items ?? []).filter((r: Resume) => r.status === "completed")));
+    api.get<{ items: Job[] }>("/job/list").then(d => setJobs(d.items ?? []));
+    api.get<{ items: SessionSummary[] }>("/interview/list").then(d => setSessions(d.items ?? []));
   }, []);
 
   async function generate() {
@@ -61,7 +65,7 @@ export default function InterviewPage() {
       let done = false;
       while (!done) {
         await new Promise(r => setTimeout(r, 2500));
-        const status = await api.get<any>(`/interview/status/${res.task_id}`);
+        const status = await api.get<{ state: string }>(`/interview/status/${res.task_id}`);
         if (status.state === "SUCCESS") {
           const session = await api.get<Session>(`/interview/${res.session_id}`);
           setActiveSession(session);
