@@ -60,8 +60,8 @@ function JobsContent() {
   const [toast, setToast] = useState<{ msg: string; type: "success"|"error"|"info" } | null>(null);
 
   useEffect(() => {
-    api.get<any>("/job/list").then(d => setJobs(d.items ?? []));
-    api.get<any>("/resume/list").then(d => setResumes((d.items ?? []).filter((r: Resume) => r.status === "completed")));
+    api.get<{ items: Job[] }>("/job/list").then(d => setJobs(d.items ?? []));
+    api.get<{ items: Resume[] }>("/resume/list").then(d => setResumes((d.items ?? []).filter((r: Resume) => r.status === "completed")));
   }, []);
 
   async function saveJob() {
@@ -87,7 +87,7 @@ function JobsContent() {
       let done = false;
       while (!done) {
         await new Promise(r => setTimeout(r, 2500));
-        const status = await api.get<any>(`/ats/status/${trigger.task_id}`);
+        const status = await api.get<{ state: string }>(`/ats/status/${trigger.task_id}`);
         if (status.state === "SUCCESS") {
           const result = await api.get<ATSResult>(`/ats/score/${selectedResume}?job_id=${selectedJob}`);
           setAtsResult(result); done = true;
@@ -205,7 +205,7 @@ function JobsContent() {
                 <div style={{ display: "flex", flexDirection: "column", gap: "0.875rem" }}>
                   {COMPONENT_META.map(([key, label, weight]) => (
                     <ProgressBar key={key} label={label} weight={weight}
-                      score={(atsResult.components as any)[key]?.score ?? 0} />
+                      score={atsResult.components[key as keyof ATSResult["components"]]?.score ?? 0} />
                   ))}
                 </div>
               </div>

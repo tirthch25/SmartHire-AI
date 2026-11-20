@@ -11,13 +11,13 @@ Responsibilities:
 import io
 import re
 from dataclasses import dataclass, field
-from typing import BinaryIO, Optional
+from typing import BinaryIO
 
 import pdfplumber
 import structlog
 
-from app.core.config import settings
 from app.core.blob_client import build_resume_key, upload_file
+from app.core.config import settings
 
 logger = structlog.get_logger(__name__)
 

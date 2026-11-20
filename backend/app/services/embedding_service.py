@@ -4,9 +4,9 @@ from functools import lru_cache
 from typing import Optional
 
 import structlog
+from sentence_transformers import SentenceTransformer
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Engine
-from sentence_transformers import SentenceTransformer
 
 from app.core.config import settings
 

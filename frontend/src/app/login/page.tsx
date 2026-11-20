@@ -4,7 +4,6 @@
  */
 import { useState, FormEvent } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 import { login, register } from "@/lib/auth";
 import { ApiError } from "@/lib/api";
 import Toast from "@/components/Toast";

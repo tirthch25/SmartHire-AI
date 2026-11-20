@@ -13,7 +13,6 @@ Provides:
 """
 
 from datetime import datetime, timedelta, timezone
-from typing import Any, Optional
 
 import structlog
 from sqlalchemy import func, select
@@ -23,7 +22,6 @@ from app.core.config import settings
 from app.core.redis_client import cache_get, cache_set
 from app.models.analysis import ATSAnalysis
 from app.models.cover_letter import CoverLetter
-from app.models.interview_session import InterviewSession
 from app.models.job import Job
 from app.models.resume import Resume
 

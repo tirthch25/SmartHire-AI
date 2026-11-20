@@ -10,15 +10,15 @@ from fastapi import FastAPI, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
 
-from app.api.v1 import auth, ats, cover_letter, dashboard, interview, job, resume
+from app.api.v1 import ats, auth, cover_letter, dashboard, interview, job, resume
 from app.core.config import settings
 from app.core.database import init_db
 from app.core.rate_limiter import limiter
 from app.core.redis_client import close_redis, init_redis
-from slowapi import _rate_limit_exceeded_handler
-from slowapi.errors import RateLimitExceeded
-from slowapi.middleware import SlowAPIMiddleware
 
 # ── Structured Logging Setup ─────────────────────────────────────────────────
 structlog.configure(
@@ -92,6 +92,9 @@ app.add_middleware(SlowAPIMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.ALLOWED_ORIGINS,
+    # allow_origin_regex supports Vercel preview URLs (e.g. smarthire-ai-*.vercel.app).
+    # Set ALLOWED_ORIGIN_REGEX env var in production; leave empty string to disable.
+    allow_origin_regex=settings.ALLOWED_ORIGIN_REGEX or None,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type", "X-Request-ID"],

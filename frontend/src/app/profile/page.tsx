@@ -9,16 +9,29 @@ import Toast from "@/components/Toast";
 import { api, ApiError } from "@/lib/api";
 import { getMe, type User } from "@/lib/auth";
 
+interface DashboardStats {
+  total_resumes: number; total_analyses: number;
+  total_jobs: number; total_cover_letters: number;
+  average_ats_score: number; best_ats_score: number;
+  last_upload: string | null;
+}
+
+interface ProfilePayload {
+  full_name?: string;
+  current_password?: string;
+  new_password?: string;
+}
+
 export default function ProfilePage() {
   const [user, setUser] = useState<User | null>(null);
-  const [stats, setStats] = useState<any>(null);
+  const [stats, setStats] = useState<DashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState<{ msg: string; type: "success"|"error"|"info" } | null>(null);
   const [form, setForm] = useState({ full_name: "", current_password: "", new_password: "" });
 
   useEffect(() => {
-    Promise.all([getMe(), api.get<any>("/dashboard/stats")]).then(([u, s]) => {
+    Promise.all([getMe(), api.get<DashboardStats>("/dashboard/stats")]).then(([u, s]) => {
       setUser(u); setStats(s);
       setForm(f => ({ ...f, full_name: u.full_name }));
     }).finally(() => setLoading(false));
@@ -28,7 +41,7 @@ export default function ProfilePage() {
     e.preventDefault();
     setSaving(true);
     try {
-      const payload: any = {};
+      const payload: ProfilePayload = {};
       if (form.full_name !== user?.full_name) payload.full_name = form.full_name;
       if (form.new_password) {
         if (!form.current_password) { setToast({ msg: "Enter current password to change it", type: "error" }); return; }

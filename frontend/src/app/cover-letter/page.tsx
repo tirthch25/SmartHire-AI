@@ -10,15 +10,19 @@ import { api, ApiError } from "@/lib/api";
 
 const TONES = ["professional", "confident", "enthusiastic", "formal"];
 
+interface Resume { id: string; filename: string; status: string; }
+interface Job { id: string; title: string; }
+interface LetterSummary { id: string; tone: string; word_count: number; created_at: string; }
+
 interface Letter {
   id: string; content: string; tone: string; word_count: number;
   job_id?: string; resume_id?: string; created_at: string;
 }
 
 export default function CoverLetterPage() {
-  const [resumes, setResumes] = useState<any[]>([]);
-  const [jobs, setJobs] = useState<any[]>([]);
-  const [letters, setLetters] = useState<any[]>([]);
+  const [resumes, setResumes] = useState<Resume[]>([]);
+  const [jobs, setJobs] = useState<Job[]>([]);
+  const [letters, setLetters] = useState<LetterSummary[]>([]);
   const [activeLetter, setActiveLetter] = useState<Letter | null>(null);
   const [loading, setLoading] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -31,9 +35,9 @@ export default function CoverLetterPage() {
   });
 
   useEffect(() => {
-    api.get<any>("/resume/list").then(d => setResumes((d.items ?? []).filter((r: any) => r.status === "completed")));
-    api.get<any>("/job/list").then(d => setJobs(d.items ?? []));
-    api.get<any>("/cover-letter/list").then(d => setLetters(d.items ?? []));
+    api.get<{ items: Resume[] }>("/resume/list").then(d => setResumes((d.items ?? []).filter((r: Resume) => r.status === "completed")));
+    api.get<{ items: Job[] }>("/job/list").then(d => setJobs(d.items ?? []));
+    api.get<{ items: LetterSummary[] }>("/cover-letter/list").then(d => setLetters(d.items ?? []));
   }, []);
 
   async function generate() {
@@ -50,7 +54,7 @@ export default function CoverLetterPage() {
       let done = false;
       while (!done) {
         await new Promise(r => setTimeout(r, 2500));
-        const status = await api.get<any>(`/cover-letter/status/${res.task_id}`);
+        const status = await api.get<{ state: string }>(`/cover-letter/status/${res.task_id}`);
         if (status.state === "SUCCESS") {
           const letter = await api.get<Letter>(`/cover-letter/${res.letter_id}`);
           setActiveLetter(letter); setEditContent(letter.content);

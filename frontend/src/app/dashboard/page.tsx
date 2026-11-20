@@ -100,7 +100,7 @@ export default function DashboardPage() {
               <div className="card card-hover" style={{ cursor: "pointer" }}>
                 <div style={{ fontSize: "1.5rem", marginBottom: "0.75rem" }}>{icon}</div>
                 <div style={{ fontSize: "1.75rem", fontWeight: 700, color: "var(--text-primary)" }}>
-                  {stats ? (stats as any)[key] : "—"}
+                  {stats ? stats[key as keyof Stats] : "—"}
                 </div>
                 <div style={{ fontSize: "0.8125rem", color: "var(--text-muted)", marginTop: "0.25rem" }}>{label}</div>
               </div>
@@ -135,7 +135,7 @@ export default function DashboardPage() {
                     key={key}
                     label={label}
                     weight={weight}
-                    score={(analytics.component_averages as any)[key] ?? 0}
+                    score={analytics.component_averages[key as keyof ComponentAverages] ?? 0}
                   />
                 ))}
               </div>

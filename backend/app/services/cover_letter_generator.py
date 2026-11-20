@@ -14,7 +14,6 @@ Output:
 - Polished, role-specific cover letter text (~300-500 words)
 """
 
-import json
 import re
 from typing import Optional
 

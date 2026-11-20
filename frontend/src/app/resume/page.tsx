@@ -5,7 +5,6 @@
  */
 import { useEffect, useRef, useState } from "react";
 import AppShell from "@/components/AppShell";
-import ScoreRing from "@/components/ScoreRing";
 import Toast from "@/components/Toast";
 import { api, ApiError } from "@/lib/api";
 import Link from "next/link";
@@ -15,7 +14,7 @@ interface ResumeSummary {
 }
 interface PaginatedResumes { items: ResumeSummary[]; total: number; page: number; }
 interface UploadResponse { resume_id: string; task_id: string; status: string; }
-interface TaskStatus { task_id: string; state: string; progress: number; message: string; result?: any; }
+interface TaskStatus { task_id: string; state: string; progress: number; message: string; result?: unknown; }
 
 function StatusBadge({ status }: { status: string }) {
   const cls = status === "completed" ? "badge-success"
@@ -41,7 +40,14 @@ export default function ResumePage() {
     } catch { /* ignore */ }
   }
 
-  useEffect(() => { loadResumes(); }, []);
+  useEffect(() => {
+    void (async () => {
+      try {
+        const data = await api.get<PaginatedResumes>("/resume/list");
+        setResumes(data.items);
+      } catch { /* ignore */ }
+    })();
+  }, []);
 
   async function uploadFile(file: File) {
     if (file.type !== "application/pdf") {

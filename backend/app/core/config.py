@@ -6,9 +6,9 @@ Provides strong typing, validation, and defaults for all configuration values.
 """
 
 from functools import lru_cache
-from typing import List, Optional
+from typing import List
 
-from pydantic import AnyHttpUrl, Field, field_validator
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -105,6 +105,12 @@ class Settings(BaseSettings):
     # ── File Upload ───────────────────────────────────────────
     MAX_UPLOAD_SIZE_BYTES: int = 10 * 1024 * 1024  # 10 MB
     ALLOWED_CONTENT_TYPES: List[str] = ["application/pdf"]
+
+    # ── CORS ──────────────────────────────────────────────────
+    # Regex pattern for allowed origins — supports Vercel preview URLs.
+    # Example: r"https://smarthire-ai.*\.vercel\.app"
+    # Leave empty ("") to disable regex matching (production: set to your preview pattern).
+    ALLOWED_ORIGIN_REGEX: str = ""
 
     # ── Rate Limiting ─────────────────────────────────────────
     RATE_LIMIT_DEFAULT: str = "60/minute"

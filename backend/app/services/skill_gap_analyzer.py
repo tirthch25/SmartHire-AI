@@ -11,7 +11,6 @@ Compares resume skills against job required skills and produces:
 
 import json
 import re
-from typing import Optional
 
 import google.generativeai as genai
 import structlog

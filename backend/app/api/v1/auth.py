@@ -15,6 +15,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.core.database import get_db
 from app.core.rate_limiter import RATE_LIMIT_AUTH, limiter
 from app.core.redis_client import (
@@ -40,7 +41,6 @@ from app.schemas.user import (
     UserResponse,
     UserUpdate,
 )
-from app.core.config import settings
 
 logger = structlog.get_logger(__name__)
 
