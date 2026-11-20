@@ -1,12 +1,10 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "nextjs",
+  "buildCommand": "cd frontend && npm run build",
+  "installCommand": "cd frontend && npm install --legacy-peer-deps",
+  "outputDirectory": "frontend/.next",
   "services": {
-    "frontend": {
-      "root": "frontend/",
-      "framework": "nextjs",
-      "buildCommand": "npm run build",
-      "installCommand": "npm install --legacy-peer-deps"
-    },
     "backend": {
       "root": "backend/",
       "runtime": "container",
@@ -32,8 +30,7 @@
     }
   },
   "rewrites": [
-    { "source": "/api/(.*)", "destination": { "service": "backend" } },
-    { "source": "/(.*)", "destination": { "service": "frontend" } }
+    { "source": "/api/(.*)", "destination": { "service": "backend" } }
   ],
   "headers": [
     {
