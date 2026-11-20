@@ -5,13 +5,7 @@
       "root": "frontend/",
       "framework": "nextjs",
       "buildCommand": "npm run build",
-      "installCommand": "npm install --legacy-peer-deps",
-      "env": {
-        "NEXT_PUBLIC_API_URL": "@next_public_api_url",
-        "NEXT_PUBLIC_APP_NAME": "@next_public_app_name",
-        "NEXT_PUBLIC_SUPABASE_URL": "@next_public_supabase_url",
-        "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY": "@next_public_supabase_publishable_key"
-      }
+      "installCommand": "npm install --legacy-peer-deps"
     },
     "backend": {
       "root": "backend/",
