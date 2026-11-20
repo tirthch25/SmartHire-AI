@@ -196,7 +196,7 @@ export default function InterviewPage() {
                 <div key={q.id} className="card" style={{ cursor: "pointer" }}
                   onClick={() => setExpanded(prev => {
                     const next = new Set(prev);
-                    next.has(q.id) ? next.delete(q.id) : next.add(q.id);
+                    if (next.has(q.id)) { next.delete(q.id); } else { next.add(q.id); }
                     return next;
                   })}>
                   <div className="flex-between">

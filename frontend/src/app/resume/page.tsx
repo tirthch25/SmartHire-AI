@@ -5,7 +5,6 @@
  */
 import { useEffect, useRef, useState } from "react";
 import AppShell from "@/components/AppShell";
-import ScoreRing from "@/components/ScoreRing";
 import Toast from "@/components/Toast";
 import { api, ApiError } from "@/lib/api";
 import Link from "next/link";
@@ -41,7 +40,14 @@ export default function ResumePage() {
     } catch { /* ignore */ }
   }
 
-  useEffect(() => { loadResumes(); }, []);
+  useEffect(() => {
+    void (async () => {
+      try {
+        const data = await api.get<PaginatedResumes>("/resume/list");
+        setResumes(data.items);
+      } catch { /* ignore */ }
+    })();
+  }, []);
 
   async function uploadFile(file: File) {
     if (file.type !== "application/pdf") {
