@@ -74,3 +74,12 @@ test-results/
 .env*
 !.env.example
 !**/.env.example
+
+# ── AI Agent config folders (never commit — may contain local instructions) ──
+.agents/
+.claude/
+.cursor/
+.gemini/
+.copilot/
+.aider/
+.continue/
