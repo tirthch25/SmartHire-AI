@@ -23,7 +23,11 @@ _redis_client: Optional[Redis] = None
 
 
 async def init_redis() -> None:
-    """Initialize the Redis connection. Called on application startup."""
+    """Initialize the Redis connection. Called on application startup.
+
+    Failure is non-fatal: the app starts in a degraded state (no caching,
+    no Celery result backend) but health/API endpoints remain available.
+    """
     global _redis_client
     try:
         _redis_client = await from_url(
@@ -39,8 +43,13 @@ async def init_redis() -> None:
         # Redis URLs contain credentials; never put them in application logs.
         logger.info("Redis connection established")
     except Exception as e:
-        logger.error("Redis connection failed", error=str(e))
-        raise
+        # Log but do NOT re-raise: app starts in degraded mode without Redis.
+        # Cache operations return None/False gracefully; auth tokens degrade.
+        logger.warning(
+            "Redis unavailable at startup — running without cache",
+            error=str(e),
+        )
+        _redis_client = None
 
 
 async def close_redis() -> None:
