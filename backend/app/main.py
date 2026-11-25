@@ -10,7 +10,6 @@ from fastapi import FastAPI, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 
@@ -85,7 +84,15 @@ app = FastAPI(
 
 # ── Rate Limiting ─────────────────────────────────────────────────────────────
 app.state.limiter = limiter
-app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+
+async def _safe_rate_limit_handler(request: Request, exc: Exception) -> JSONResponse:
+    """Safe handler that avoids AttributeError when slowapi passes a ConnectionError."""
+    detail = getattr(exc, "detail", str(exc))
+    return JSONResponse({"error": f"Rate limit exceeded: {detail}"}, status_code=429)
+
+
+app.add_exception_handler(RateLimitExceeded, _safe_rate_limit_handler)
 app.add_middleware(SlowAPIMiddleware)
 
 # ── CORS ─────────────────────────────────────────────────────────────────────
@@ -122,6 +129,23 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
             "detail": "Input validation failed",
             "error_code": "VALIDATION_ERROR",
             "errors": errors,
+        },
+    )
+
+
+@app.exception_handler(ConnectionError)
+async def redis_connection_error_handler(request: Request, exc: ConnectionError):
+    """Return 503 when Redis (or any connection) is unavailable — avoids 500."""
+    logger.warning(
+        "Connection error on request",
+        path=str(request.url),
+        error=str(exc),
+    )
+    return JSONResponse(
+        status_code=503,
+        content={
+            "detail": "A dependent service is temporarily unavailable",
+            "error_code": "SERVICE_UNAVAILABLE",
         },
     )
 

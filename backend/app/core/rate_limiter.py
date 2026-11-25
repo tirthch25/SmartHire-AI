@@ -13,11 +13,21 @@ from app.core.config import settings
 # ── Limiter Instance ──────────────────────────────────────────────────────────
 # key_func: use client IP address as the rate limit key.
 # storage_uri: Redis backend so limits are shared across all API workers.
-limiter = Limiter(
-    key_func=get_remote_address,
-    storage_uri=settings.REDIS_URL,
-    default_limits=[settings.RATE_LIMIT_DEFAULT],
-)
+# Falls back to in-memory storage if Redis is unavailable at import time,
+# so the app starts cleanly even when Redis is unreachable (rate limits become
+# per-process instead of distributed — acceptable for degraded mode).
+try:
+    limiter = Limiter(
+        key_func=get_remote_address,
+        storage_uri=settings.REDIS_URL,
+        default_limits=[settings.RATE_LIMIT_DEFAULT],
+    )
+except Exception:  # noqa: BLE001
+    limiter = Limiter(
+        key_func=get_remote_address,
+        storage_uri="memory://",
+        default_limits=[settings.RATE_LIMIT_DEFAULT],
+    )
 
 # ── Exported Limit Decorators ─────────────────────────────────────────────────
 # Use these as decorators on route handlers:
