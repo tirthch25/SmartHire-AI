@@ -12,6 +12,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.responses import Response
 
 from app.api.v1 import ats, auth, cover_letter, dashboard, interview, job, resume
 from app.core.config import settings
@@ -87,13 +89,42 @@ app.state.limiter = limiter
 
 
 async def _safe_rate_limit_handler(request: Request, exc: Exception) -> JSONResponse:
-    """Safe handler that avoids AttributeError when slowapi passes a ConnectionError."""
+    """Safe handler: avoids AttributeError when slowapi passes a ConnectionError."""
     detail = getattr(exc, "detail", str(exc))
     return JSONResponse({"error": f"Rate limit exceeded: {detail}"}, status_code=429)
 
 
 app.add_exception_handler(RateLimitExceeded, _safe_rate_limit_handler)
+
+
+class _SafeSlowAPIMiddleware(BaseHTTPMiddleware):
+    """
+    Drop-in replacement for SlowAPIMiddleware that catches ConnectionError
+    (thrown when the rate-limit Redis backend is unreachable) and returns
+    HTTP 503 instead of crashing with an AttributeError 500.
+    """
+
+    async def dispatch(self, request: Request, call_next):  # type: ignore[override]
+        try:
+            response = await call_next(request)
+            return response
+        except ConnectionError as exc:
+            logger.warning(
+                "Redis connection error in rate limiter middleware",
+                path=str(request.url),
+                error=str(exc),
+            )
+            return Response(
+                content='{"detail":"Cache service temporarily unavailable","error_code":"CACHE_UNAVAILABLE"}',
+                status_code=503,
+                media_type="application/json",
+            )
+
+
+# Register SlowAPI first so its internals attach to app.state.limiter, then
+# wrap it with our safe middleware that catches ConnectionError escapes.
 app.add_middleware(SlowAPIMiddleware)
+app.add_middleware(_SafeSlowAPIMiddleware)
 
 # ── CORS ─────────────────────────────────────────────────────────────────────
 app.add_middleware(
